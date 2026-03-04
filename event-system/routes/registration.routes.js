@@ -9,8 +9,13 @@ const {
 
 const router = express.Router();
 
-router.post('/', auth, authorizeRoles('student', 'admin', 'organizer'), registerForEvent);
+// Đăng ký event: POST /api/events/:id/register
+router.post('/:id/register', auth, authorizeRoles('student', 'admin', 'organizer'), registerForEvent);
+
+// Các API phụ (nếu cần) sẽ trở thành:
+// GET /api/events/my  -> danh sách event đã đăng ký của current user
 router.get('/my', auth, getMyRegistrations);
+// GET /api/events/event/:eventId -> admin xem danh sách registration theo event
 router.get('/event/:eventId', auth, authorizeRoles('admin'), getRegistrationsByEvent);
 
 module.exports = router;

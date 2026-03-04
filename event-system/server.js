@@ -24,7 +24,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/events', eventRoutes);
-app.use('/api/registrations', registrationRoutes);
+app.use('/api/events', registrationRoutes);
 app.use('/api/attendance', attendanceRoutes);
 
 // Global error handler
