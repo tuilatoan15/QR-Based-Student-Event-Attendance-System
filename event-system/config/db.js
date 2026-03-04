@@ -22,6 +22,10 @@ const config = {
 
 const poolPromise = new sql.ConnectionPool(config)
   .connect()
+  .then((pool) => {
+    console.log('SQL Server connected');
+    return pool;
+  })
   .catch((err) => {
     console.error('SQL Server connection error:', err);
     throw err;
