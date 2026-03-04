@@ -3,11 +3,13 @@ const generateQrToken = require('../utils/generateQrToken');
 
 const registerForEvent = async (req, res, next) => {
   try {
-    const { event_id } = req.body;
     const userId = req.user.id;
+    // Ưu tiên lấy từ params (Cách 1: /api/events/:id/register), fallback body (cũ)
+    const rawEventId = req.params.id || req.body.event_id;
+    const event_id = rawEventId ? parseInt(rawEventId, 10) : null;
 
-    if (!event_id) {
-      return res.status(400).json({ message: 'event_id is required' });
+    if (!event_id || Number.isNaN(event_id) || event_id <= 0) {
+      return res.status(400).json({ message: 'Invalid event_id' });
     }
 
     const pool = await poolPromise;
