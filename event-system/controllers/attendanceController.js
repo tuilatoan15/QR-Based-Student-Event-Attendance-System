@@ -76,3 +76,7 @@ const checkIn = async (req, res, next) => {
     next(err);
   }
 };
+
+module.exports = {
+  checkIn
+};
