@@ -23,7 +23,7 @@ const checkIn = async (req, res, next) => {
     }
 
     if (registration.status !== REGISTRATION_STATUS.REGISTERED) {
-      return errorResponse(res, 400, 'Already checked in');
+      return errorResponse(res, 409, 'Already checked in');
     }
 
     if (registration.event_is_active !== 1 && registration.event_is_active !== true) {
@@ -32,7 +32,7 @@ const checkIn = async (req, res, next) => {
 
     const alreadyHasAttendance = await hasAttendanceForRegistration(registration.id);
     if (alreadyHasAttendance) {
-      return errorResponse(res, 400, 'Already checked in');
+      return errorResponse(res, 409, 'Already checked in');
     }
 
     const pool = await poolPromise;

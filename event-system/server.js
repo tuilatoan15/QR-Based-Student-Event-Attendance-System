@@ -8,7 +8,7 @@ dotenv.config();
 
 const { setupSwagger } = require('./docs/swagger');
 const { authLimiter } = require('./middlewares/rateLimitMiddleware');
-const errorMiddleware = require('./middlewares/errorMiddleware');
+const errorHandler = require('./middlewares/errorHandler');
 const { logServerStart } = require('./utils/logger');
 
 require('./config/db');
@@ -33,6 +33,10 @@ app.get('/', (req, res) => {
   });
 });
 
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 setupSwagger(app);
 
 app.use('/api/auth', authLimiter, authRoutes);
@@ -40,7 +44,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/attendance', attendanceRoutes);
 
-app.use(errorMiddleware);
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 

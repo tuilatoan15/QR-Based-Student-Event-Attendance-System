@@ -29,16 +29,19 @@ const createEvent = async ({
   return result.recordset[0].id;
 };
 
-const getAllEvents = async () => {
+const getAllEvents = async (offset = 0, limit = 10) => {
   const pool = await poolPromise;
   const result = await pool
     .request()
+    .input('offset', sql.Int, offset)
+    .input('limit', sql.Int, limit)
     .query(
       `SELECT e.*, c.name AS category_name
        FROM events e
        LEFT JOIN event_categories c ON e.category_id = c.id
        WHERE e.is_active = 1
-       ORDER BY e.start_time ASC`
+       ORDER BY e.start_time ASC
+       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`
     );
   return result.recordset;
 };
