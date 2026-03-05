@@ -182,8 +182,9 @@ GO
 ---------------------------------------------------------
 CREATE INDEX idx_users_email ON dbo.users(email);
 CREATE INDEX idx_events_start_time ON dbo.events(start_time);
-CREATE INDEX idx_registrations_event ON dbo.registrations(event_id);
-CREATE INDEX idx_registrations_user ON dbo.registrations(user_id);
+CREATE INDEX idx_reg_user ON dbo.registrations(user_id);
+CREATE INDEX idx_reg_event ON dbo.registrations(event_id);
+CREATE INDEX idx_qr_token ON dbo.registrations(qr_token);
 GO
 
 /* ================= END OF FILE ================= */

@@ -39,6 +39,8 @@ The API is documented with Swagger, uses structured logging and rate limiting on
 
 ```
 event-system/
+├── src/
+│   └── app.js                # Express app (used by server and tests)
 ├── config/
 │   └── db.js                 # SQL Server connection pool
 ├── docs/
@@ -51,22 +53,31 @@ event-system/
 │   ├── authMiddleware.js     # JWT verification, req.user
 │   ├── roleMiddleware.js     # Role-based access (admin, organizer, student)
 │   ├── errorMiddleware.js    # Global error handler and logging
-│   └── rateLimitMiddleware.js # Rate limit for auth routes
+│   ├── errorHandler.js       # Central error handler implementation
+│   ├── rateLimitMiddleware.js # Rate limits (auth + global /api)
+│   ├── validateId.js         # Centralized ID validation for :id params
+│   └── validators/
+│       ├── authValidator.js  # Register/login validation
+│       └── eventValidator.js # Create/update event validation
 ├── models/
 │   ├── userModel.js          # Users and roles data access
 │   ├── eventModel.js         # Events data access
-│   └── registrationModel.js # Registrations and attendances data access
+│   └── registrationModel.js  # Registrations and attendances data access
 ├── routes/
 │   ├── authRoutes.js         # POST /register, /login
 │   ├── userRoutes.js         # GET /me/events
 │   ├── eventRoutes.js        # Events CRUD + register, registrations, attendances
-│   └── attendanceRoutes.js  # POST /checkin
+│   └── attendanceRoutes.js   # POST /checkin
 ├── utils/
-│   ├── response.js           # successResponse, errorResponse
+│   ├── response.js           # successResponse, paginatedSuccessResponse, errorResponse
 │   ├── qrGenerator.js        # UUID token and QR Data URL generation
 │   └── logger.js             # Winston logger and helpers
+├── tests/                    # Jest + supertest API tests
 ├── database.sql              # Schema and seed data
-├── server.js                 # App entry, middleware, routes
+├── Dockerfile                # Backend Docker image
+├── docker-compose.yml        # Backend + SQL Server stack
+├── jest.config.js            # Jest configuration
+├── server.js                 # App entry: bootstraps src/app.js
 ├── package.json
 └── README.md
 ```
@@ -173,6 +184,42 @@ Protected routes use header: `Authorization: Bearer <JWT>`.
 
    - Open [http://localhost:5000/api/docs](http://localhost:5000/api/docs) for Swagger UI.
    - Use Postman or curl with the examples below.
+
+---
+
+## How to Test
+
+The project includes basic Jest + supertest API tests.
+
+```bash
+cd event-system
+npm test
+```
+
+> Lưu ý: Các test hiện tại tập trung vào validation và các response cơ bản (không khởi chạy SQL Server). Bạn có thể mở rộng thêm integration test thực tế bằng cách cấu hình DB test riêng.
+
+---
+
+## Docker Usage
+
+You can run the backend and SQL Server using Docker Compose.
+
+### Build and run
+
+```bash
+cd event-system
+docker-compose up --build
+```
+
+This will:
+
+- Start SQL Server on port `1433`
+- Build and start the backend service on port `5000`
+
+Once running, access:
+
+- API: `http://localhost:5000`
+- Swagger: `http://localhost:5000/api/docs`
 
 ---
 
