@@ -15,12 +15,23 @@ const {
   REGISTRATION_STATUS
 } = require('../models/registrationModel');
 const { generateQrToken, generateQRCodeDataURL } = require('../utils/qrGenerator');
-const { successResponse, errorResponse } = require('../utils/response');
+const { successResponse, paginatedSuccessResponse, errorResponse } = require('../utils/response');
 
 const getEvents = async (req, res, next) => {
   try {
-    const events = await getAllEvents();
-    return successResponse(res, 200, 'Events retrieved successfully', events);
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+
+    const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+    const safeLimit = Number.isInteger(limit) && limit > 0 ? limit : 10;
+    const offset = (safePage - 1) * safeLimit;
+
+    const events = await getAllEvents(offset, safeLimit);
+
+    return paginatedSuccessResponse(res, 200, 'Events retrieved successfully', events, {
+      page: safePage,
+      limit: safeLimit
+    });
   } catch (err) {
     next(err);
   }
@@ -28,10 +39,7 @@ const getEvents = async (req, res, next) => {
 
 const getEventByIdHandler = async (req, res, next) => {
   try {
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isInteger(id) || id <= 0) {
-      return errorResponse(res, 400, 'Invalid event id');
-    }
+    const id = req.params.id;
     const event = await getEventById(id);
     if (!event) {
       return errorResponse(res, 404, 'Event not found');
@@ -46,22 +54,13 @@ const createEventHandler = async (req, res, next) => {
   try {
     const { title, description, location, start_time, end_time, max_participants, category_id } = req.body;
 
-    if (!title || !location || !start_time || !end_time || max_participants == null) {
-      return errorResponse(res, 400, 'title, location, start_time, end_time, max_participants are required');
-    }
-
-    const maxCap = parseInt(max_participants, 10);
-    if (!Number.isInteger(maxCap) || maxCap <= 0) {
-      return errorResponse(res, 400, 'max_participants must be a positive integer');
-    }
-
     const eventId = await createEvent({
       title,
       description: description || null,
       location,
       start_time,
       end_time,
-      max_participants: maxCap,
+      max_participants,
       category_id: category_id || null,
       created_by: req.user.id
     });
@@ -74,10 +73,7 @@ const createEventHandler = async (req, res, next) => {
 
 const updateEventHandler = async (req, res, next) => {
   try {
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isInteger(id) || id <= 0) {
-      return errorResponse(res, 400, 'Invalid event id');
-    }
+    const id = req.params.id;
 
     const event = await getEventById(id);
     if (!event) {
@@ -91,13 +87,7 @@ const updateEventHandler = async (req, res, next) => {
     if (location != null) fields.location = location;
     if (start_time != null) fields.start_time = start_time;
     if (end_time != null) fields.end_time = end_time;
-    if (max_participants != null) {
-      const maxCap = parseInt(max_participants, 10);
-      if (!Number.isInteger(maxCap) || maxCap <= 0) {
-        return errorResponse(res, 400, 'max_participants must be a positive integer');
-      }
-      fields.max_participants = maxCap;
-    }
+    if (max_participants != null) fields.max_participants = max_participants;
     if (category_id != null) fields.category_id = category_id;
     if (is_active !== undefined) fields.is_active = is_active;
 
@@ -110,10 +100,7 @@ const updateEventHandler = async (req, res, next) => {
 
 const deleteEvent = async (req, res, next) => {
   try {
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isInteger(id) || id <= 0) {
-      return errorResponse(res, 400, 'Invalid event id');
-    }
+    const id = req.params.id;
 
     const event = await getEventById(id);
     if (!event) {
@@ -130,28 +117,24 @@ const deleteEvent = async (req, res, next) => {
 const registerForEvent = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const eventId = parseInt(req.params.id, 10);
-
-    if (!Number.isInteger(eventId) || eventId <= 0) {
-      return errorResponse(res, 400, 'Invalid event id');
-    }
+    const eventId = req.params.id;
 
     const event = await getEventById(eventId);
     if (!event) {
       return errorResponse(res, 404, 'Event not found');
     }
     if (!event.is_active) {
-      return errorResponse(res, 400, 'Event is not active');
+      return errorResponse(res, 409, 'Event is not active');
     }
 
     const existing = await findRegistrationByUserAndEvent(userId, eventId);
     if (existing) {
-      return errorResponse(res, 400, 'Already registered for this event');
+      return errorResponse(res, 409, 'Already registered for this event');
     }
 
     const count = await countRegistrationsForEvent(eventId);
     if (count >= event.max_participants) {
-      return errorResponse(res, 400, 'Event is full');
+      return errorResponse(res, 409, 'Event is full');
     }
 
     const qr_token = generateQrToken();
@@ -166,7 +149,7 @@ const registerForEvent = async (req, res, next) => {
     });
   } catch (err) {
     if (err.number === 2627 || err.number === 2601) {
-      return errorResponse(res, 400, 'Already registered for this event');
+      return errorResponse(res, 409, 'Already registered for this event');
     }
     next(err);
   }
@@ -184,10 +167,7 @@ const getUserEvents = async (req, res, next) => {
 
 const getEventRegistrations = async (req, res, next) => {
   try {
-    const eventId = parseInt(req.params.id, 10);
-    if (!Number.isInteger(eventId) || eventId <= 0) {
-      return errorResponse(res, 400, 'Invalid event id');
-    }
+    const eventId = req.params.id;
     const event = await getEventById(eventId);
     if (!event) {
       return errorResponse(res, 404, 'Event not found');
@@ -201,10 +181,7 @@ const getEventRegistrations = async (req, res, next) => {
 
 const getEventAttendances = async (req, res, next) => {
   try {
-    const eventId = parseInt(req.params.id, 10);
-    if (!Number.isInteger(eventId) || eventId <= 0) {
-      return errorResponse(res, 400, 'Invalid event id');
-    }
+    const eventId = req.params.id;
     const event = await getEventById(eventId);
     if (!event) {
       return errorResponse(res, 404, 'Event not found');

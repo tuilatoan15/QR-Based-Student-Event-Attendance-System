@@ -29,6 +29,24 @@ const options = {
             data: { type: 'object' }
           }
         },
+        PaginatedSuccessResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            message: { type: 'string' },
+            data: {
+              type: 'array',
+              items: { type: 'object' }
+            },
+            pagination: {
+              type: 'object',
+              properties: {
+                page: { type: 'integer', example: 1 },
+                limit: { type: 'integer', example: 10 }
+              }
+            }
+          }
+        },
         ErrorResponse: {
           type: 'object',
           properties: {
@@ -81,7 +99,8 @@ const options = {
       { name: 'Events', description: 'Event CRUD' },
       { name: 'Registration', description: 'Event registration' },
       { name: 'Attendance', description: 'QR check-in' },
-      { name: 'Users', description: 'User events' }
+      { name: 'Users', description: 'User events' },
+      { name: 'Health', description: 'Service health' }
     ]
   },
   apis: []
@@ -118,7 +137,28 @@ spec.paths = {
     get: {
       tags: ['Events'],
       summary: 'List events',
-      responses: { 200: { description: 'List of events', content: { 'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } } } } }
+      parameters: [
+        {
+          name: 'page',
+          in: 'query',
+          required: false,
+          schema: { type: 'integer', minimum: 1 },
+          description: 'Page number (default 1)'
+        },
+        {
+          name: 'limit',
+          in: 'query',
+          required: false,
+          schema: { type: 'integer', minimum: 1 },
+          description: 'Page size (default 10)'
+        }
+      ],
+      responses: {
+        200: {
+          description: 'List of events (paginated)',
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/PaginatedSuccessResponse' } } }
+        }
+      }
     },
     post: {
       tags: ['Events'],
@@ -216,8 +256,30 @@ spec.paths = {
       requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/CheckinBody' } } } },
       responses: {
         200: { description: 'Check-in successful', content: { 'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } } } },
-        400: { description: 'Already checked in or invalid', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+        400: { description: 'Invalid request body or QR token missing', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+        409: { description: 'Already checked in', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
         404: { description: 'Invalid QR code', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+      }
+    }
+  },
+  '/health': {
+    get: {
+      tags: ['Health'],
+      summary: 'Health check',
+      responses: {
+        200: {
+          description: 'Service is healthy',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: { type: 'string', example: 'ok' }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
