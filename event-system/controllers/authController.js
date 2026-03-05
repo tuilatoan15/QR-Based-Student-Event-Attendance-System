@@ -1,98 +1,101 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
-const { createUser, findUserByEmail } = require('../models/userModel');
+const { createUser, findUserByEmail, getRoleIdByName } = require('../models/userModel');
+const { successResponse, errorResponse } = require('../utils/response');
 
 dotenv.config();
 
-const SALT_ROUNDS = 10;
+const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS || '10', 10);
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1d';
 
 const generateToken = (user) => {
-  const payload = {
-    id: user.id,
-    email: user.email,
-    role: user.role
-  };
-
-  return jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || '1d'
-  });
+  return jwt.sign(
+    { id: user.id, email: user.email, role: user.role_name || user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+  );
 };
 
-const register = async (req, res) => {
+const register = async (req, res, next) => {
   try {
-    const { name, email, password } = req.body;
+    const { full_name, email, password, student_code } = req.body;
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: 'Name, email and password are required' });
+    if (!full_name || !email || !password) {
+      return errorResponse(res, 400, 'full_name, email and password are required');
     }
 
-    const existingUser = await findUserByEmail(email);
-    if (existingUser) {
-      return res.status(409).json({ message: 'Email already registered' });
+    const existing = await findUserByEmail(email);
+    if (existing) {
+      return errorResponse(res, 409, 'Email already registered');
     }
 
-    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+    const roleId = await getRoleIdByName('student');
+    if (!roleId) {
+      return errorResponse(res, 500, 'Default student role not configured');
+    }
 
-    // Force role to 'student' for registration
+    const password_hash = await bcrypt.hash(password, SALT_ROUNDS);
     const newUser = await createUser({
-      name,
+      full_name,
       email,
-      password: hashedPassword,
-      role: 'student'
+      password_hash,
+      role_id: roleId,
+      student_code: student_code || null
     });
 
-    const token = generateToken(newUser);
+    const userWithRole = { ...newUser, role_name: 'student' };
+    const token = generateToken(userWithRole);
 
-    res.status(201).json({
-      message: 'Student registered successfully',
+    return successResponse(res, 201, 'User registered successfully', {
       user: {
         id: newUser.id,
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role
+        full_name,
+        email,
+        role: 'student'
       },
       token
     });
-  } catch (error) {
-    console.error('Register error:', error);
-    res.status(500).json({ message: 'Server error during registration' });
+  } catch (err) {
+    next(err);
   }
 };
 
-const login = async (req, res) => {
+const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ message: 'Email and password are required' });
+      return errorResponse(res, 400, 'email and password are required');
     }
 
     const user = await findUserByEmail(email);
     if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return errorResponse(res, 401, 'Invalid credentials');
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+    if (!user.is_active) {
+      return errorResponse(res, 401, 'Account is inactive');
+    }
+
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (!match) {
+      return errorResponse(res, 401, 'Invalid credentials');
     }
 
     const token = generateToken(user);
 
-    res.json({
-      message: 'Login successful',
+    return successResponse(res, 200, 'Login successful', {
       user: {
         id: user.id,
-        name: user.name,
+        full_name: user.full_name,
         email: user.email,
-        role: user.role
+        role: user.role_name
       },
       token
     });
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ message: 'Server error during login' });
+  } catch (err) {
+    next(err);
   }
 };
 
@@ -100,4 +103,3 @@ module.exports = {
   register,
   login
 };
-
