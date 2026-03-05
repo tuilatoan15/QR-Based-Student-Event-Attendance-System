@@ -38,7 +38,7 @@ const findRegistrationByQrToken = async (qr_token) => {
     .request()
     .input('qr_token', sql.NVarChar(255), qr_token)
     .query(
-      `SELECT r.*, u.full_name, u.email, e.title AS event_title
+      `SELECT r.*, u.full_name, u.email, e.title AS event_title, e.is_active AS event_is_active
        FROM registrations r
        JOIN users u ON r.user_id = u.id
        JOIN events e ON r.event_id = e.id

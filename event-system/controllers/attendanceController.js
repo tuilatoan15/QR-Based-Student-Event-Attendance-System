@@ -5,24 +5,29 @@ const {
   REGISTRATION_STATUS
 } = require('../models/registrationModel');
 const { successResponse, errorResponse } = require('../utils/response');
+const { logCheckin } = require('../utils/logger');
 
 const checkIn = async (req, res, next) => {
   try {
-    const { qr_code } = req.body;
-
-    if (!qr_code || typeof qr_code !== 'string' || !qr_code.trim()) {
-      return errorResponse(res, 400, 'qr_code is required');
+    const { qr_token: bodyQrToken, qr_code } = req.body;
+    const raw = bodyQrToken || qr_code;
+    if (!raw || typeof raw !== 'string' || !raw.trim()) {
+      return errorResponse(res, 400, 'qr_token is required');
     }
 
-    const qr_token = qr_code.trim();
+    const qr_token = raw.trim();
     const registration = await findRegistrationByQrToken(qr_token);
 
     if (!registration) {
       return errorResponse(res, 404, 'Invalid QR code');
     }
 
-    if (registration.status === REGISTRATION_STATUS.ATTENDED) {
+    if (registration.status !== REGISTRATION_STATUS.REGISTERED) {
       return errorResponse(res, 400, 'Already checked in');
+    }
+
+    if (registration.event_is_active !== 1 && registration.event_is_active !== true) {
+      return errorResponse(res, 400, 'Event is not active');
     }
 
     const alreadyHasAttendance = await hasAttendanceForRegistration(registration.id);
@@ -53,6 +58,8 @@ const checkIn = async (req, res, next) => {
         .query('UPDATE registrations SET status = @status WHERE id = @reg_id');
 
       await transaction.commit();
+
+      logCheckin(registration.id, req.user.id);
 
       return successResponse(res, 200, 'Check-in successful', {
         registration_id: registration.id,
