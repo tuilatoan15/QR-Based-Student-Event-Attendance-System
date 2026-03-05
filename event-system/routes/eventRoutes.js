@@ -1,23 +1,28 @@
 const express = require('express');
+const auth = require('../middlewares/authMiddleware');
+const authorizeRoles = require('../middlewares/roleMiddleware');
 const {
-  createEventController,
-  getEventsController,
-  getEventByIdController
+  getEvents,
+  getEventById,
+  createEvent,
+  updateEvent,
+  deleteEvent,
+  registerForEvent,
+  getEventRegistrations,
+  getEventAttendances
 } = require('../controllers/eventController');
-
-const authMiddleware = require('../middleware/authMiddleware');
-const authorizeRoles = require('../middleware/roleMiddleware');
 
 const router = express.Router();
 
-// Create event (admin only)
-router.post('/', authMiddleware, authorizeRoles('admin'), createEventController);
+router.get('/', getEvents);
+router.get('/:id', getEventById);
 
-// Get all events (public)
-router.get('/', getEventsController);
+router.post('/:id/register', auth, authorizeRoles('student'), registerForEvent);
+router.get('/:id/registrations', auth, authorizeRoles('admin', 'organizer'), getEventRegistrations);
+router.get('/:id/attendances', auth, authorizeRoles('admin', 'organizer'), getEventAttendances);
 
-// Get event by id (public)
-router.get('/:id', getEventByIdController);
+router.post('/', auth, authorizeRoles('admin', 'organizer'), createEvent);
+router.put('/:id', auth, authorizeRoles('admin', 'organizer'), updateEvent);
+router.delete('/:id', auth, authorizeRoles('admin', 'organizer'), deleteEvent);
 
 module.exports = router;
-

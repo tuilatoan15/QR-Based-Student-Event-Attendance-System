@@ -1,13 +1,14 @@
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
+const { errorResponse } = require('../utils/response');
 
 dotenv.config();
 
-const authMiddleware = (req, res, next) => {
-  const authHeader = req.headers['authorization'] || req.headers['Authorization'];
+const auth = (req, res, next) => {
+  const authHeader = req.headers.authorization || req.headers.Authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ message: 'Authorization header missing or invalid' });
+    return errorResponse(res, 401, 'Authorization header missing or invalid');
   }
 
   const token = authHeader.split(' ')[1];
@@ -21,9 +22,8 @@ const authMiddleware = (req, res, next) => {
     };
     next();
   } catch (err) {
-    return res.status(401).json({ message: 'Invalid or expired access token' });
+    return errorResponse(res, 401, 'Invalid or expired token');
   }
 };
 
-module.exports = authMiddleware;
-
+module.exports = auth;

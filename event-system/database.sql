@@ -105,7 +105,7 @@ CREATE TABLE dbo.registrations (
     event_id INT NOT NULL,
     qr_token NVARCHAR(255) NOT NULL UNIQUE,
     status NVARCHAR(20) NOT NULL DEFAULT 'registered'
-        CHECK (status IN ('registered','cancelled')),
+        CHECK (status IN ('registered','attended','cancelled')),
     registered_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
 
     CONSTRAINT fk_reg_user

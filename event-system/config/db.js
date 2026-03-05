@@ -7,7 +7,7 @@ const config = {
   user: process.env.DB_USER || 'sa',
   password: process.env.DB_PASSWORD || '',
   server: process.env.DB_SERVER || 'localhost',
-  database: process.env.DB_DATABASE || 'event_system',
+  database: process.env.DB_NAME || process.env.DB_DATABASE || 'event_system',
   port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 1433,
   options: {
     encrypt: false,

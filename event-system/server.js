@@ -6,11 +6,11 @@ dotenv.config();
 
 require('./config/db');
 
-const authRoutes = require('./routes/auth.routes');
-const userRoutes = require('./routes/user.routes');
-const eventRoutes = require('./routes/event.routes');
-const registrationRoutes = require('./routes/registration.routes');
-const attendanceRoutes = require('./routes/attendance.routes');
+const authRoutes = require('./routes/authRoutes');
+const userRoutes = require('./routes/userRoutes');
+const eventRoutes = require('./routes/eventRoutes');
+const attendanceRoutes = require('./routes/attendanceRoutes');
+const errorMiddleware = require('./middlewares/errorMiddleware');
 
 const app = express();
 
@@ -18,23 +18,19 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', (req, res) => {
-  res.json({ message: 'Smart Event Attendance System API' });
+  res.status(200).json({
+    success: true,
+    message: 'QR-Based Student Event Attendance API',
+    data: null
+  });
 });
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/events', eventRoutes);
-app.use('/api/events', registrationRoutes);
 app.use('/api/attendance', attendanceRoutes);
 
-// Global error handler
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  const statusCode = err.statusCode || 500;
-  res.status(statusCode).json({
-    message: err.message || 'Internal Server Error'
-  });
-});
+app.use(errorMiddleware);
 
 const PORT = process.env.PORT || 5000;
 
