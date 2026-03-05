@@ -14,7 +14,7 @@ const {
   getAttendancesForEvent,
   REGISTRATION_STATUS
 } = require('../models/registrationModel');
-const { generateQrToken } = require('../utils/qrGenerator');
+const { generateQrToken, generateQRCodeDataURL } = require('../utils/qrGenerator');
 const { successResponse, errorResponse } = require('../utils/response');
 
 const getEvents = async (req, res, next) => {
@@ -157,9 +157,12 @@ const registerForEvent = async (req, res, next) => {
     const qr_token = generateQrToken();
     const registration = await createRegistration({ user_id: userId, event_id: eventId, qr_token });
 
+    const qr_code = await generateQRCodeDataURL(qr_token);
+
     return successResponse(res, 201, 'Registered successfully', {
       registration: { id: registration.id, event_id: eventId, user_id: userId },
-      qr_token
+      qr_token,
+      qr_code
     });
   } catch (err) {
     if (err.number === 2627 || err.number === 2601) {

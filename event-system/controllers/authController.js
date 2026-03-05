@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
 const { createUser, findUserByEmail, getRoleIdByName } = require('../models/userModel');
 const { successResponse, errorResponse } = require('../utils/response');
+const { logAuthAttempt } = require('../utils/logger');
 
 dotenv.config();
 
@@ -71,18 +72,22 @@ const login = async (req, res, next) => {
 
     const user = await findUserByEmail(email);
     if (!user) {
+      logAuthAttempt(email, false);
       return errorResponse(res, 401, 'Invalid credentials');
     }
 
     if (!user.is_active) {
+      logAuthAttempt(email, false);
       return errorResponse(res, 401, 'Account is inactive');
     }
 
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) {
+      logAuthAttempt(email, false);
       return errorResponse(res, 401, 'Invalid credentials');
     }
 
+    logAuthAttempt(email, true);
     const token = generateToken(user);
 
     return successResponse(res, 200, 'Login successful', {
