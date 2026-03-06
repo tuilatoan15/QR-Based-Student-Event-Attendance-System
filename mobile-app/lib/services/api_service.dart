@@ -8,20 +8,40 @@ class ApiService {
 
   final String baseUrl;
 
+  /// Protected endpoints that always require authentication
+  static const Set<String> _protectedEndpoints = {
+    '/api/events/register',
+    '/api/users/me/events',
+    '/api/attendance/checkin',
+  };
+
   Future<String?> _getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('auth_token');
   }
 
+  /// Check if endpoint requires authentication
+  bool _isProtectedEndpoint(String path) {
+    for (final endpoint in _protectedEndpoints) {
+      if (path.contains(endpoint)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   Future<http.Response> post(
     String path, {
     Map<String, dynamic>? body,
-    bool authenticated = false,
+    bool? authenticated,
   }) async {
     final uri = Uri.parse('$baseUrl$path');
     final headers = <String, String>{'Content-Type': 'application/json'};
 
-    if (authenticated) {
+    // Auto-detect if path requires auth, or use explicit flag
+    final needsAuth = authenticated ?? _isProtectedEndpoint(path);
+
+    if (needsAuth) {
       final token = await _getToken();
       if (token != null && token.isNotEmpty) {
         headers['Authorization'] = 'Bearer $token';
@@ -33,12 +53,15 @@ class ApiService {
 
   Future<http.Response> get(
     String path, {
-    bool authenticated = false,
+    bool? authenticated,
   }) async {
     final uri = Uri.parse('$baseUrl$path');
     final headers = <String, String>{'Content-Type': 'application/json'};
 
-    if (authenticated) {
+    // Auto-detect if path requires auth, or use explicit flag
+    final needsAuth = authenticated ?? _isProtectedEndpoint(path);
+
+    if (needsAuth) {
       final token = await _getToken();
       if (token != null && token.isNotEmpty) {
         headers['Authorization'] = 'Bearer $token';
@@ -48,4 +71,3 @@ class ApiService {
     return http.get(uri, headers: headers);
   }
 }
-
