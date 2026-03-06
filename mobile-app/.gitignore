@@ -1,0 +1,46 @@
+# Flutter/Dart
+.dart_tool/
+.packages
+.pub/
+.pub-cache/
+build/
+
+# Flutter plugins
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Android
+android/.gradle/
+android/local.properties
+android/app/debug
+android/app/profile
+android/app/release
+
+# iOS
+ios/Flutter/.last_build_id
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/.symlinks/
+ios/.generated/
+ios/Pods/
+
+# MacOS
+macos/Flutter/ephemeral/
+
+# Windows
+windows/flutter/ephemeral/
+
+# Linux
+linux/flutter/ephemeral/
+
+# Logs
+*.log
+
+# System files
+.DS_Store
+Thumbs.db
