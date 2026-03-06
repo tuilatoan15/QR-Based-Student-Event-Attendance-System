@@ -50,11 +50,12 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
 
     if (success) {
+      // Clear error message on success
+      auth.errorMessage = null;
       Navigator.of(context).pushReplacementNamed(EventListScreen.routeName);
-    } else if (auth.errorMessage != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(auth.errorMessage!)),
-      );
+    } else {
+      // Error message is already set in AuthService
+      setState(() {});
     }
   }
 
@@ -120,6 +121,36 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        // Error Banner
+                        if (auth.errorMessage != null &&
+                            auth.errorMessage!.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.errorContainer,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.error_outline,
+                                  color: theme.colorScheme.error,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    auth.errorMessage!,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.error,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (auth.errorMessage != null &&
+                            auth.errorMessage!.isNotEmpty)
+                          const SizedBox(height: 16),
                         // Email Field
                         TextFormField(
                           controller: _emailController,
