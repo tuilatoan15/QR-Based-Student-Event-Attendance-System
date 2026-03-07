@@ -178,13 +178,36 @@ CREATE TABLE dbo.audit_logs (
 GO
 
 ---------------------------------------------------------
--- 11. INDEXES (OPTIMIZATION)
+-- 11. EVENT MEMBERS (FOR GOOGLE SHEETS INTEGRATION)
+---------------------------------------------------------
+CREATE TABLE dbo.event_members (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    event_id INT NOT NULL,
+    student_id NVARCHAR(50) NOT NULL,
+    student_name NVARCHAR(255) NOT NULL,
+    email NVARCHAR(255) NOT NULL,
+    qr_code NVARCHAR(255) NOT NULL UNIQUE,
+    attendance_status BIT NOT NULL DEFAULT 0, -- 0 = chưa điểm danh, 1 = đã điểm danh
+    checkin_time DATETIME2 NULL,
+    created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+
+    CONSTRAINT fk_event_members_event
+        FOREIGN KEY (event_id)
+        REFERENCES dbo.events(id)
+        ON DELETE CASCADE
+);
+GO
+
+---------------------------------------------------------
+-- 12. INDEXES (OPTIMIZATION)
 ---------------------------------------------------------
 CREATE INDEX idx_users_email ON dbo.users(email);
 CREATE INDEX idx_events_start_time ON dbo.events(start_time);
 CREATE INDEX idx_reg_user ON dbo.registrations(user_id);
 CREATE INDEX idx_reg_event ON dbo.registrations(event_id);
 CREATE INDEX idx_qr_token ON dbo.registrations(qr_token);
+CREATE INDEX idx_event_members_event ON dbo.event_members(event_id);
+CREATE INDEX idx_event_members_qr ON dbo.event_members(qr_code);
 GO
 
 /* ================= END OF FILE ================= */

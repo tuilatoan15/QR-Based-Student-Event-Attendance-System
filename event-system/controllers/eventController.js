@@ -17,6 +17,9 @@ const {
 } = require('../models/registrationModel');
 const { generateQrToken, generateQRCodeDataURL } = require('../utils/qrGenerator');
 const { successResponse, paginatedSuccessResponse, errorResponse } = require('../utils/response');
+const googleSheetService = require('../services/googleSheetService');
+const { createEventMember } = require('../models/eventMemberModel');
+const { findUserById } = require('../models/userModel');
 
 const getEvents = async (req, res, next) => {
   try {
@@ -65,6 +68,16 @@ const createEventHandler = async (req, res, next) => {
       category_id: category_id || null,
       created_by: req.user.id
     });
+
+    // Create Google Sheet for the event
+    try {
+      const event = await getEventById(eventId);
+      const sheetInfo = await googleSheetService.createEventSheet(event);
+      // You can store sheetInfo.url in the event record if needed
+    } catch (sheetError) {
+      console.error('Error creating Google Sheet:', sheetError);
+      // Don't fail the event creation if sheet creation fails
+    }
 
     return successResponse(res, 201, 'Event created successfully', { id: eventId });
   } catch (err) {
@@ -138,22 +151,52 @@ const registerForEvent = async (req, res, next) => {
       return errorResponse(res, 409, 'Event is full');
     }
 
+    // Get user info for event_members
+    const user = await findUserById(userId);
+    if (!user) {
+      return errorResponse(res, 404, 'User not found');
+    }
+
     let registration;
+    let qr_token;
     if (existing && existing.status === REGISTRATION_STATUS.CANCELLED) {
       // Re-register by updating status
       await updateRegistrationStatus(existing.id, REGISTRATION_STATUS.REGISTERED);
       registration = { ...existing, status: REGISTRATION_STATUS.REGISTERED };
+      qr_token = existing.qr_token;
     } else {
       // New registration
-      const qr_token = generateQrToken();
+      qr_token = generateQrToken();
       registration = await createRegistration({ user_id: userId, event_id: eventId, qr_token });
     }
 
-    const qr_code = await generateQRCodeDataURL(registration.qr_token);
+    // Create event_member record
+    const eventMemberId = await createEventMember({
+      event_id: eventId,
+      student_id: user.student_code || `USER_${userId}`,
+      student_name: user.full_name,
+      email: user.email,
+      qr_code: qr_token
+    });
+
+    // Add to Google Sheet
+    try {
+      await googleSheetService.addStudentToSheet(eventId, {
+        student_id: user.student_code || `USER_${userId}`,
+        student_name: user.full_name,
+        email: user.email,
+        qr_code: qr_token
+      });
+    } catch (sheetError) {
+      console.error('Error adding student to Google Sheet:', sheetError);
+      // Don't fail registration if sheet update fails
+    }
+
+    const qr_code = await generateQRCodeDataURL(qr_token);
 
     return successResponse(res, 201, 'Registered successfully', {
       registration: { id: registration.id, event_id: eventId, user_id: userId },
-      qr_token: registration.qr_token,
+      qr_token: qr_token,
       qr_code
     });
   } catch (err) {

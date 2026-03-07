@@ -22,12 +22,14 @@ class ApiService {
 
   /// Check if endpoint requires authentication
   bool _isProtectedEndpoint(String path) {
-    for (final endpoint in _protectedEndpoints) {
-      if (path.contains(endpoint)) {
-        return true;
-      }
-    }
-    return false;
+    // Endpoints that require authentication
+    final protectedPatterns = [
+      '/api/events/', // includes POST, DELETE /:id/register
+      '/api/users/me/', // user-specific endpoints
+      '/api/attendance/', // attendance endpoints
+    ];
+
+    return protectedPatterns.any((pattern) => path.contains(pattern));
   }
 
   Future<http.Response> post(

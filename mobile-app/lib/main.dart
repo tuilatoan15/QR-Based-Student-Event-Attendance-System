@@ -10,6 +10,7 @@ import 'screens/event_list_screen.dart';
 import 'screens/event_detail_screen.dart';
 import 'screens/my_events_screen.dart';
 import 'screens/qr_screen.dart';
+import 'screens/admin_scan_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,6 +51,7 @@ class SmartEventAttendanceApp extends StatelessWidget {
                   const EventDetailScreen(),
               MyEventsScreen.routeName: (context) => const MyEventsScreen(),
               QRScreen.routeName: (context) => const QRScreen(),
+              AdminScanScreen.routeName: (context) => const AdminScanScreen(),
             },
           );
         },
