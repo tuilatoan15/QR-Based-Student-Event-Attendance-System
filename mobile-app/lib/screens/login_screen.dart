@@ -65,11 +65,12 @@ class _LoginScreenState extends State<LoginScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       body: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               SizedBox(height: MediaQuery.of(context).size.height * 0.1),
               // App Logo/Icon

@@ -10,6 +10,7 @@ const {
   updateEvent,
   deleteEvent,
   registerForEvent,
+  cancelRegistration,
   getEventRegistrations,
   getEventAttendances
 } = require('../controllers/eventController');
@@ -20,6 +21,7 @@ router.get('/', getEvents);
 router.get('/:id', validateId('id'), getEventById);
 
 router.post('/:id/register', validateId('id'), auth, authorizeRoles('student'), registerForEvent);
+router.delete('/:id/register', validateId('id'), auth, authorizeRoles('student'), cancelRegistration);
 router.get('/:id/registrations', validateId('id'), auth, authorizeRoles('admin', 'organizer'), getEventRegistrations);
 router.get('/:id/attendances', validateId('id'), auth, authorizeRoles('admin', 'organizer'), getEventAttendances);
 
