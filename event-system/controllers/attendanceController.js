@@ -4,8 +4,10 @@ const {
   hasAttendanceForRegistration,
   REGISTRATION_STATUS
 } = require('../models/registrationModel');
+const { findEventMemberByQrCode, updateAttendanceStatus } = require('../models/eventMemberModel');
 const { successResponse, errorResponse } = require('../utils/response');
 const { logCheckin } = require('../utils/logger');
+const googleSheetService = require('../services/googleSheetService');
 
 const checkIn = async (req, res, next) => {
   try {
@@ -16,62 +18,37 @@ const checkIn = async (req, res, next) => {
     }
 
     const qr_token = raw.trim();
-    const registration = await findRegistrationByQrToken(qr_token);
+    const eventMember = await findEventMemberByQrCode(qr_token);
 
-    if (!registration) {
+    if (!eventMember) {
       return errorResponse(res, 404, 'Invalid QR code');
     }
 
-    if (registration.status !== REGISTRATION_STATUS.REGISTERED) {
+    if (eventMember.attendance_status === 1) {
       return errorResponse(res, 409, 'Already checked in');
     }
 
-    if (registration.event_is_active !== 1 && registration.event_is_active !== true) {
-      return errorResponse(res, 400, 'Event is not active');
-    }
+    // Update attendance status in database
+    const checkin_time = new Date();
+    await updateAttendanceStatus(eventMember.id, 1, checkin_time);
 
-    const alreadyHasAttendance = await hasAttendanceForRegistration(registration.id);
-    if (alreadyHasAttendance) {
-      return errorResponse(res, 409, 'Already checked in');
-    }
-
-    const pool = await poolPromise;
-    const transaction = new sql.Transaction(pool);
-
+    // Update Google Sheet
     try {
-      await transaction.begin();
-      const txRequest = new sql.Request(transaction);
-
-      const insertResult = await txRequest
-        .input('registration_id', sql.Int, registration.id)
-        .input('checkin_by', sql.Int, req.user.id)
-        .query(
-          `INSERT INTO attendances (registration_id, checkin_time, checkin_by)
-           OUTPUT INSERTED.checkin_time AS checkin_time
-           VALUES (@registration_id, SYSUTCDATETIME(), @checkin_by)`
-        );
-      const checkin_time = insertResult.recordset[0].checkin_time;
-
-      await txRequest
-        .input('reg_id', sql.Int, registration.id)
-        .input('status', sql.NVarChar(20), REGISTRATION_STATUS.ATTENDED)
-        .query('UPDATE registrations SET status = @status WHERE id = @reg_id');
-
-      await transaction.commit();
-
-      logCheckin(registration.id, req.user.id);
-
-      return successResponse(res, 200, 'Check-in successful', {
-        registration_id: registration.id,
-        checked_in_by: req.user.id,
-        check_in_time: checkin_time
-      });
-    } catch (txErr) {
-      try {
-        await transaction.rollback();
-      } catch (_) {}
-      next(txErr);
+      await googleSheetService.markAttendance(qr_token);
+    } catch (sheetError) {
+      console.error('Error updating Google Sheet:', sheetError);
+      // Don't fail check-in if sheet update fails
     }
+
+    logCheckin(eventMember.id, req.user.id);
+
+    return successResponse(res, 200, 'Check-in successful', {
+      event_member_id: eventMember.id,
+      student_name: eventMember.student_name,
+      event_id: eventMember.event_id,
+      checked_in_by: req.user.id,
+      check_in_time: checkin_time
+    });
   } catch (err) {
     next(err);
   }

@@ -136,7 +136,10 @@ class EventService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await _api.get('/api/users/me/events');
+      final response = await _api.get(
+        '/api/users/me/events',
+        authenticated: true,
+      );
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (response.statusCode == 200 && decoded['success'] == true) {
@@ -182,5 +185,35 @@ class EventService extends ChangeNotifier {
 
     isLoading = false;
     notifyListeners();
+  }
+
+  /// Admin QR check-in. Returns the response data map on success, or null on
+  /// failure.  The returned map may contain fields such as
+  /// `student_name`, `event_title`, and `check_in_time`.
+  Future<Map<String, dynamic>?> checkIn(String qrCode) async {
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      final response = await _api.post(
+        '/api/attendance/checkin',
+        authenticated: true,
+        body: {'qr_code': qrCode},
+      );
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200 && decoded['success'] == true) {
+        return decoded['data'] as Map<String, dynamic>?;
+      } else {
+        errorMessage = decoded['message'] as String? ?? 'Check-in failed';
+      }
+    } catch (e) {
+      errorMessage = 'Unable to check in. Please try again.';
+    }
+
+    isLoading = false;
+    notifyListeners();
+    return null;
   }
 }
