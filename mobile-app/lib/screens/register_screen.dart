@@ -20,6 +20,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _studentCodeController = TextEditingController();
+  late FocusNode _fullNameFocus;
+  late FocusNode _emailFocus;
+  late FocusNode _passwordFocus;
+  late FocusNode _studentCodeFocus;
+
+  @override
+  void initState() {
+    super.initState();
+    _fullNameFocus = FocusNode();
+    _emailFocus = FocusNode();
+    _passwordFocus = FocusNode();
+    _studentCodeFocus = FocusNode();
+  }
 
   @override
   void dispose() {
@@ -27,6 +40,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _studentCodeController.dispose();
+    _fullNameFocus.dispose();
+    _emailFocus.dispose();
+    _passwordFocus.dispose();
+    _studentCodeFocus.dispose();
     super.dispose();
   }
 
@@ -59,12 +76,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(title: const Text('Create Account')),
       body: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SizedBox(height: MediaQuery.of(context).size.height * 0.05),
               Container(
@@ -146,6 +165,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           const SizedBox(height: 16),
                         TextFormField(
                           controller: _fullNameController,
+                          focusNode: _fullNameFocus,
                           decoration: InputDecoration(
                             labelText: 'Full Name',
                             hintText: 'John Doe',
@@ -162,6 +182,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ),
                           ),
                           textInputAction: TextInputAction.next,
+                          onFieldSubmitted: (_) {
+                            _fullNameFocus.unfocus();
+                            FocusScope.of(context).requestFocus(_emailFocus);
+                          },
                           validator: (value) {
                             if (value == null || value.isEmpty) {
                               return 'Full name is required';
@@ -172,6 +196,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         const SizedBox(height: 16),
                         TextFormField(
                           controller: _emailController,
+                          focusNode: _emailFocus,
                           decoration: InputDecoration(
                             labelText: 'Email',
                             hintText: 'student@example.com',
@@ -189,6 +214,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           keyboardType: TextInputType.emailAddress,
                           textInputAction: TextInputAction.next,
+                          onFieldSubmitted: (_) {
+                            _emailFocus.unfocus();
+                            FocusScope.of(context).requestFocus(_passwordFocus);
+                          },
                           validator: (value) {
                             if (value == null || value.isEmpty) {
                               return 'Email is required';
@@ -202,6 +231,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         const SizedBox(height: 16),
                         TextFormField(
                           controller: _passwordController,
+                          focusNode: _passwordFocus,
                           decoration: InputDecoration(
                             labelText: 'Password',
                             hintText: 'At least 6 characters',
@@ -219,6 +249,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           obscureText: true,
                           textInputAction: TextInputAction.next,
+                          onFieldSubmitted: (_) {
+                            _passwordFocus.unfocus();
+                            FocusScope.of(context)
+                                .requestFocus(_studentCodeFocus);
+                          },
                           validator: (value) {
                             if (value == null || value.isEmpty) {
                               return 'Password is required';
@@ -232,6 +267,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         const SizedBox(height: 16),
                         TextFormField(
                           controller: _studentCodeController,
+                          focusNode: _studentCodeFocus,
                           decoration: InputDecoration(
                             labelText: 'Student Code (Optional)',
                             hintText: 'e.g., SV123456',
@@ -248,6 +284,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ),
                           ),
                           textInputAction: TextInputAction.done,
+                          onFieldSubmitted: (_) {
+                            _studentCodeFocus.unfocus();
+                            _submit();
+                          },
                         ),
                         const SizedBox(height: 24),
                         PrimaryButton(

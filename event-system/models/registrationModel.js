@@ -62,14 +62,40 @@ const getRegistrationsByUserWithEvents = async (user_id) => {
     .request()
     .input('user_id', sql.Int, user_id)
     .query(
-      `SELECT r.id AS registration_id, r.qr_token, r.status, r.registered_at,
-              e.id AS event_id, e.title, e.location, e.start_time, e.end_time, e.description
+      `SELECT 
+              e.id, e.title, e.location, e.start_time, e.end_time, e.description, e.max_participants,
+              r.id AS registration_id, r.user_id, r.qr_token, r.status, r.registered_at
        FROM registrations r
        JOIN events e ON r.event_id = e.id
-       WHERE r.user_id = @user_id
+       WHERE r.user_id = @user_id AND r.status != 'cancelled'
        ORDER BY e.start_time ASC`
     );
-  return result.recordset;
+  
+  // Group by event and add registration
+  const eventsMap = {};
+  result.recordset.forEach(row => {
+    const eventId = row.id;
+    if (!eventsMap[eventId]) {
+      eventsMap[eventId] = {
+        id: row.id,
+        title: row.title,
+        location: row.location,
+        start_time: row.start_time,
+        end_time: row.end_time,
+        description: row.description,
+        max_participants: row.max_participants,
+        registration: {
+          id: row.registration_id,
+          user_id: row.user_id,
+          qr_token: row.qr_token,
+          status: row.status,
+          registered_at: row.registered_at
+        }
+      };
+    }
+  });
+  
+  return Object.values(eventsMap);
 };
 
 const getRegistrationsForEvent = async (event_id) => {

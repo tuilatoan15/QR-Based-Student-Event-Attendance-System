@@ -70,4 +70,24 @@ class ApiService {
 
     return http.get(uri, headers: headers);
   }
+
+  Future<http.Response> delete(
+    String path, {
+    bool? authenticated,
+  }) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final headers = <String, String>{'Content-Type': 'application/json'};
+
+    // Auto-detect if path requires auth, or use explicit flag
+    final needsAuth = authenticated ?? _isProtectedEndpoint(path);
+
+    if (needsAuth) {
+      final token = await _getToken();
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+    }
+
+    return http.delete(uri, headers: headers);
+  }
 }

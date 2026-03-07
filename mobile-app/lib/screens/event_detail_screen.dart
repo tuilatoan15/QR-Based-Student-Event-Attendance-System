@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/event.dart';
+import '../models/registration.dart';
 import '../services/event_service.dart';
 import '../widgets/primary_button.dart';
 import 'qr_screen.dart';
@@ -17,6 +18,7 @@ class EventDetailScreen extends StatefulWidget {
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
   Event? _event;
+  Registration? _registration;
 
   @override
   void didChangeDependencies() {
@@ -29,10 +31,17 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   Future<void> _loadEvent(int id) async {
     final eventService = context.read<EventService>();
+
+    // Load the event detail
     final event = await eventService.fetchEventDetail(id);
+
+    // Also fetch myEvents to populate registration cache
+    await eventService.fetchMyEvents();
+
     if (mounted) {
       setState(() {
         _event = event;
+        _registration = eventService.getRegistration(id);
       });
     }
   }
@@ -47,9 +56,78 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     if (!mounted) return;
 
     if (registration != null) {
-      Navigator.of(context).pushNamed(
-        QRScreen.routeName,
-        arguments: registration.qrToken,
+      setState(() {
+        _registration = registration;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Successfully registered for event!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else if (eventService.errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(eventService.errorMessage!),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _showQRCode() async {
+    if (_registration == null) return;
+
+    if (!mounted) return;
+
+    Navigator.of(context).pushNamed(
+      QRScreen.routeName,
+      arguments: {
+        'event': _event,
+        'registration': _registration,
+      },
+    );
+  }
+
+  Future<void> _cancelRegistration() async {
+    final id = _event?.id;
+    if (id == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel Registration'),
+        content:
+            const Text('Are you sure you want to cancel this registration?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('No'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Yes, Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final eventService = context.read<EventService>();
+    final success = await eventService.cancelRegistration(id);
+
+    if (!mounted) return;
+
+    if (success) {
+      setState(() {
+        _registration = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Registration cancelled'),
+          backgroundColor: Colors.green,
+        ),
       );
     } else if (eventService.errorMessage != null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -273,11 +351,40 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           ),
                         ),
                         const SizedBox(height: 24),
-                        PrimaryButton(
-                          label: 'Register for Event',
-                          isLoading: eventService.isLoading,
-                          onPressed: _register,
-                        ),
+                        if (_registration == null)
+                          PrimaryButton(
+                            label: 'Register for Event',
+                            isLoading: eventService.isLoading,
+                            onPressed: _register,
+                          )
+                        else
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: eventService.isLoading
+                                      ? null
+                                      : _showQRCode,
+                                  icon: const Icon(Icons.qr_code_2),
+                                  label: const Text('Show QR Code'),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: eventService.isLoading
+                                      ? null
+                                      : _cancelRegistration,
+                                  icon: const Icon(Icons.close),
+                                  label: const Text('Cancel'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         const SizedBox(height: 16),
                       ],
                     ),

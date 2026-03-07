@@ -12,6 +12,7 @@ const {
   getRegistrationsByUserWithEvents,
   getRegistrationsForEvent,
   getAttendancesForEvent,
+  updateRegistrationStatus,
   REGISTRATION_STATUS
 } = require('../models/registrationModel');
 const { generateQrToken, generateQRCodeDataURL } = require('../utils/qrGenerator');
@@ -128,7 +129,7 @@ const registerForEvent = async (req, res, next) => {
     }
 
     const existing = await findRegistrationByUserAndEvent(userId, eventId);
-    if (existing) {
+    if (existing && existing.status !== REGISTRATION_STATUS.CANCELLED) {
       return errorResponse(res, 409, 'Already registered for this event');
     }
 
@@ -137,14 +138,22 @@ const registerForEvent = async (req, res, next) => {
       return errorResponse(res, 409, 'Event is full');
     }
 
-    const qr_token = generateQrToken();
-    const registration = await createRegistration({ user_id: userId, event_id: eventId, qr_token });
+    let registration;
+    if (existing && existing.status === REGISTRATION_STATUS.CANCELLED) {
+      // Re-register by updating status
+      await updateRegistrationStatus(existing.id, REGISTRATION_STATUS.REGISTERED);
+      registration = { ...existing, status: REGISTRATION_STATUS.REGISTERED };
+    } else {
+      // New registration
+      const qr_token = generateQrToken();
+      registration = await createRegistration({ user_id: userId, event_id: eventId, qr_token });
+    }
 
-    const qr_code = await generateQRCodeDataURL(qr_token);
+    const qr_code = await generateQRCodeDataURL(registration.qr_token);
 
     return successResponse(res, 201, 'Registered successfully', {
       registration: { id: registration.id, event_id: eventId, user_id: userId },
-      qr_token,
+      qr_token: registration.qr_token,
       qr_code
     });
   } catch (err) {
@@ -179,6 +188,27 @@ const getEventRegistrations = async (req, res, next) => {
   }
 };
 
+const cancelRegistration = async (req, res, next) => {
+  try {
+    const eventId = req.params.id;
+    const userId = req.user.id;
+
+    const registration = await findRegistrationByUserAndEvent(userId, eventId);
+    if (!registration) {
+      return errorResponse(res, 404, 'Registration not found');
+    }
+
+    if (registration.status === REGISTRATION_STATUS.CANCELLED) {
+      return errorResponse(res, 400, 'Registration is already cancelled');
+    }
+
+    await updateRegistrationStatus(registration.id, REGISTRATION_STATUS.CANCELLED);
+    return successResponse(res, 200, 'Registration cancelled successfully');
+  } catch (err) {
+    next(err);
+  }
+};
+
 const getEventAttendances = async (req, res, next) => {
   try {
     const eventId = req.params.id;
@@ -200,6 +230,7 @@ module.exports = {
   updateEvent: updateEventHandler,
   deleteEvent,
   registerForEvent,
+  cancelRegistration,
   getUserEvents,
   getEventRegistrations,
   getEventAttendances

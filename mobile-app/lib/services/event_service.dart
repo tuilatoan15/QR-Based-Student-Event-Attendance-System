@@ -16,6 +16,8 @@ class EventService extends ChangeNotifier {
   List<Event> myEvents = [];
   bool isLoading = false;
   String? errorMessage;
+  Map<int, Registration?> _registrations =
+      {}; // Track registrations by event ID
 
   Future<void> fetchEvents() async {
     isLoading = true;
@@ -66,12 +68,14 @@ class EventService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await _api.post('/api/events/$id/register');
+      final response =
+          await _api.post('/api/events/$id/register', authenticated: true);
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (response.statusCode == 201 && decoded['success'] == true) {
         final data = decoded['data'] as Map<String, dynamic>;
         final registration = Registration.fromRegisterResponse(data);
+        _registrations[id] = registration;
         isLoading = false;
         notifyListeners();
         return registration;
@@ -88,6 +92,44 @@ class EventService extends ChangeNotifier {
     return null;
   }
 
+  Future<bool> cancelRegistration(int eventId) async {
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      final response = await _api.delete(
+        '/api/events/$eventId/register',
+        authenticated: true,
+      );
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200 && decoded['success'] == true) {
+        _registrations[eventId] = null;
+        isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        errorMessage =
+            decoded['message'] as String? ?? 'Failed to cancel registration';
+      }
+    } catch (e) {
+      errorMessage = 'Unable to cancel registration. Please try again.';
+    }
+
+    isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  Registration? getRegistration(int eventId) {
+    return _registrations[eventId];
+  }
+
+  bool isUserRegistered(int eventId) {
+    return _registrations[eventId] != null;
+  }
+
   Future<void> fetchMyEvents() async {
     isLoading = true;
     errorMessage = null;
@@ -101,6 +143,35 @@ class EventService extends ChangeNotifier {
         final data = decoded['data'] as List<dynamic>? ?? [];
         myEvents =
             data.map((e) => Event.fromJson(e as Map<String, dynamic>)).toList();
+
+        // Populate registration cache from response
+        // If the response includes registration data, extract it
+        final eventsList = decoded['data'] as List<dynamic>? ?? [];
+        for (final eventData in eventsList) {
+          if (eventData is Map<String, dynamic>) {
+            final eventId = eventData['id'] as int?;
+            final registrationData =
+                eventData['registration'] as Map<String, dynamic>?;
+
+            if (eventId != null && registrationData != null) {
+              try {
+                // Reconstruct Registration from event response data
+                final registration = Registration(
+                  registrationId: registrationData['id'] as int? ?? 0,
+                  eventId: eventId,
+                  userId: registrationData['user_id'] as int? ?? 0,
+                  qrToken: registrationData['qr_token'] as String? ??
+                      eventData['qr_code'] as String? ??
+                      '',
+                  status: 'registered',
+                );
+                _registrations[eventId] = registration;
+              } catch (e) {
+                // Skip if registration data format is invalid
+              }
+            }
+          }
+        }
       } else {
         errorMessage =
             decoded['message'] as String? ?? 'Failed to fetch my events';
