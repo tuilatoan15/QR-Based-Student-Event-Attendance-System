@@ -6,12 +6,16 @@ class GoogleSheetService {
   constructor() {
     this.doc = null;
     this.serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-    this.privateKey = process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n');
+    this.privateKey = process.env.GOOGLE_PRIVATE_KEY ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n') : null;
     this.sheetId = process.env.GOOGLE_SHEET_ID;
   }
 
   async authenticate() {
     if (!this.doc) {
+      if (!this.sheetId || !this.serviceAccountEmail || !this.privateKey) {
+        throw new Error('Google Sheets credentials not configured');
+      }
+
       this.doc = new GoogleSpreadsheet(this.sheetId);
       await this.doc.useServiceAccountAuth({
         client_email: this.serviceAccountEmail,
@@ -20,112 +24,108 @@ class GoogleSheetService {
     }
   }
 
-  async createEventSheet(event) {
+  /**
+   * Create a new sheet for an event
+   * @param {string} eventTitle - The title of the event
+   * @returns {Object} - Sheet information
+   */
+  async createEventSheet(eventTitle) {
     try {
       await this.authenticate();
+      await this.doc.loadInfo();
 
       // Create a new sheet for the event
+      const sheetName = eventTitle.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').substring(0, 50);
       const newSheet = await this.doc.addSheet({
-        title: `Event_${event.id}_${event.title.replace(/[^a-zA-Z0-9]/g, '_')}`,
-        headerValues: ['Student_ID', 'Student_Name', 'Email', 'QR_Code', 'Attendance_Status', 'Checkin_Time']
+        title: sheetName,
+        headerValues: ['Student Name', 'Student Code', 'Email', 'QR Token', 'Attendance Status']
       });
 
       return {
-        sheetId: newSheet.sheetId,
-        title: newSheet.title,
+        sheetId: newSheet.sheetId.toString(),
+        sheetName: sheetName,
         url: `https://docs.google.com/spreadsheets/d/${this.sheetId}/edit#gid=${newSheet.sheetId}`
       };
     } catch (error) {
       console.error('Error creating event sheet:', error);
-      throw error;
+      throw new Error(`Failed to create Google Sheet: ${error.message}`);
     }
   }
 
-  async addStudentToSheet(eventId, student) {
+  /**
+   * Add a student to an event's Google Sheet
+   * @param {string} sheetName - The name of the sheet
+   * @param {Object} studentData - Student information
+   */
+  async addStudentToSheet(sheetName, studentData) {
     try {
       await this.authenticate();
       await this.doc.loadInfo();
 
-      const sheetName = Object.keys(this.doc.sheetsByTitle).find(title =>
-        title.startsWith(`Event_${eventId}_`)
-      );
-
-      if (!sheetName) {
-        throw new Error(`Sheet for event ${eventId} not found`);
+      const sheet = this.doc.sheetsByTitle[sheetName];
+      if (!sheet) {
+        throw new Error(`Sheet "${sheetName}" not found`);
       }
 
-      const sheet = this.doc.sheetsByTitle[sheetName];
       await sheet.addRow({
-        Student_ID: student.student_id,
-        Student_Name: student.student_name,
-        Email: student.email,
-        QR_Code: student.qr_code,
-        Attendance_Status: 'NO',
-        Checkin_Time: ''
+        'Student Name': studentData.student_name,
+        'Student Code': studentData.student_code || '',
+        'Email': studentData.email,
+        'QR Token': studentData.qr_token,
+        'Attendance Status': 'Not Attended'
       });
 
     } catch (error) {
       console.error('Error adding student to sheet:', error);
-      throw error;
+      throw new Error(`Failed to add student to Google Sheet: ${error.message}`);
     }
   }
 
-  async markAttendance(qrCode) {
+  /**
+   * Update attendance status in Google Sheet
+   * @param {string} sheetName - The name of the sheet
+   * @param {string} qrToken - The QR token to find
+   */
+  async updateAttendanceStatus(sheetName, qrToken) {
     try {
       await this.authenticate();
       await this.doc.loadInfo();
-
-      // Find the sheet that contains this QR code
-      let targetSheet = null;
-      let rowIndex = -1;
-
-      for (const [sheetName, sheet] of Object.entries(this.doc.sheetsByTitle)) {
-        if (!sheetName.startsWith('Event_')) continue;
-
-        const rows = await sheet.getRows();
-        const foundRow = rows.findIndex(row => row.QR_Code === qrCode);
-        if (foundRow !== -1) {
-          targetSheet = sheet;
-          rowIndex = foundRow;
-          break;
-        }
-      }
-
-      if (!targetSheet || rowIndex === -1) {
-        throw new Error(`QR code ${qrCode} not found in any sheet`);
-      }
-
-      const rows = await targetSheet.getRows();
-      const row = rows[rowIndex];
-
-      row.Attendance_Status = 'YES';
-      row.Checkin_Time = new Date().toISOString();
-      await row.save();
-
-    } catch (error) {
-      console.error('Error marking attendance:', error);
-      throw error;
-    }
-  }
-
-  async getEventSheetUrl(eventId) {
-    try {
-      await this.authenticate();
-      await this.doc.loadInfo();
-
-      const sheetName = Object.keys(this.doc.sheetsByTitle).find(title =>
-        title.startsWith(`Event_${eventId}_`)
-      );
-
-      if (!sheetName) {
-        return null;
-      }
 
       const sheet = this.doc.sheetsByTitle[sheetName];
-      return `https://docs.google.com/spreadsheets/d/${this.sheetId}/edit#gid=${sheet.sheetId}`;
+      if (!sheet) {
+        throw new Error(`Sheet "${sheetName}" not found`);
+      }
+
+      const rows = await sheet.getRows();
+
+      // Find the row with matching QR token
+      const targetRow = rows.find(row => row['QR Token'] === qrToken);
+      if (!targetRow) {
+        throw new Error(`QR token ${qrToken} not found in sheet`);
+      }
+
+      // Update attendance status
+      targetRow['Attendance Status'] = 'Attended';
+      await targetRow.save();
+
     } catch (error) {
-      console.error('Error getting event sheet URL:', error);
-      return null;
+      console.error('Error updating attendance status:', error);
+      throw new Error(`Failed to update attendance in Google Sheet: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get all sheets in the spreadsheet
+   * @returns {Array} - List of sheet names
+   */
+  async getSheetNames() {
+    try {
+      await this.authenticate();
+      await this.doc.loadInfo();
+      return Object.keys(this.doc.sheetsByTitle);
+    } catch (error) {
+      console.error('Error getting sheet names:', error);
+      throw error;
     }
   }
 }

@@ -22,7 +22,9 @@ class _EventListScreenState extends State<EventListScreen> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => context.read<EventService>().fetchEvents());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<EventService>().fetchEvents();
+    });
   }
 
   @override

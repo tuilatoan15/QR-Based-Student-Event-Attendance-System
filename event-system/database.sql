@@ -1,5 +1,12 @@
 /* =====================================================
    QR BASED STUDENT EVENT ATTENDANCE SYSTEM DATABASE
+   =====================================================
+   Refactored for production readiness:
+   - Removed redundant event_members table (logic covered by registrations/attendances)
+   - Added proper constraints, indexes, and timestamps
+   - Normalized schema with relational integrity
+   - Added CHECK constraints for data validation
+   - Optimized indexes for common REST API queries
    ===================================================== */
 
 ---------------------------------------------------------
@@ -26,6 +33,7 @@ IF OBJECT_ID('dbo.event_categories', 'U') IS NOT NULL DROP TABLE dbo.event_categ
 IF OBJECT_ID('dbo.users', 'U') IS NOT NULL DROP TABLE dbo.users;
 IF OBJECT_ID('dbo.roles', 'U') IS NOT NULL DROP TABLE dbo.roles;
 GO
+---------------------------------------------------------
 
 ---------------------------------------------------------
 -- 3. ROLES
@@ -60,6 +68,17 @@ CREATE TABLE dbo.users (
 );
 GO
 
+-- Sample Users Data (passwords hashed with bcrypt, salt rounds 10)
+-- Original password for all: '123456'
+INSERT INTO dbo.users (full_name, email, password_hash, student_code, role_id)
+VALUES 
+('System Admin', 'admin@university.edu', '$2b$10$sI/rsbkKcqWyNB8yYbLTZeuNnq..u4tOIA2yZpCkefXs8VF8ZuBwG', NULL, 1),
+('Event Organizer', 'organizer@university.edu', '$2b$10$sI/rsbkKcqWyNB8yYbLTZeuNnq..u4tOIA2yZpCkefXs8VF8ZuBwG', NULL, 2),
+('Nguyen Van A', 'student1@university.edu', '$2b$10$sI/rsbkKcqWyNB8yYbLTZeuNnq..u4tOIA2yZpCkefXs8VF8ZuBwG', 'SV001', 3),
+('Tran Thi B', 'student2@university.edu', '$2b$10$sI/rsbkKcqWyNB8yYbLTZeuNnq..u4tOIA2yZpCkefXs8VF8ZuBwG', 'SV002', 3),
+('Le Van C', 'student3@university.edu', '$2b$10$sI/rsbkKcqWyNB8yYbLTZeuNnq..u4tOIA2yZpCkefXs8VF8ZuBwG', 'SV003', 3);
+GO
+
 ---------------------------------------------------------
 -- 5. EVENT CATEGORIES
 ---------------------------------------------------------
@@ -83,8 +102,11 @@ CREATE TABLE dbo.events (
     max_participants INT NOT NULL CHECK (max_participants > 0),
     category_id INT NULL,
     created_by INT NOT NULL,
+    google_sheet_id NVARCHAR(255) NULL,
+    google_sheet_name NVARCHAR(255) NULL,
     is_active BIT NOT NULL DEFAULT 1,
     created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at DATETIME2 NULL,
 
     CONSTRAINT fk_events_category
         FOREIGN KEY (category_id)
@@ -92,7 +114,10 @@ CREATE TABLE dbo.events (
 
     CONSTRAINT fk_events_created_by
         FOREIGN KEY (created_by)
-        REFERENCES dbo.users(id)
+        REFERENCES dbo.users(id),
+
+    CONSTRAINT chk_events_end_after_start
+        CHECK (end_time > start_time)
 );
 GO
 
@@ -107,6 +132,7 @@ CREATE TABLE dbo.registrations (
     status NVARCHAR(20) NOT NULL DEFAULT 'registered'
         CHECK (status IN ('registered','attended','cancelled')),
     registered_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at DATETIME2 NULL,
 
     CONSTRAINT fk_reg_user
         FOREIGN KEY (user_id)
@@ -130,6 +156,8 @@ CREATE TABLE dbo.attendances (
     registration_id INT NOT NULL UNIQUE,
     checkin_time DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     checkin_by INT NOT NULL,
+    created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at DATETIME2 NULL,
 
     CONSTRAINT fk_attendance_registration
         FOREIGN KEY (registration_id)
@@ -148,15 +176,19 @@ GO
 CREATE TABLE dbo.refresh_tokens (
     id INT IDENTITY(1,1) PRIMARY KEY,
     user_id INT NOT NULL,
-    token NVARCHAR(500) NOT NULL,
+    token NVARCHAR(500) NOT NULL UNIQUE,
     expires_at DATETIME2 NOT NULL,
     created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at DATETIME2 NULL,
     is_revoked BIT NOT NULL DEFAULT 0,
 
     CONSTRAINT fk_refresh_user
         FOREIGN KEY (user_id)
         REFERENCES dbo.users(id)
-        ON DELETE CASCADE
+        ON DELETE CASCADE,
+
+    CONSTRAINT chk_refresh_expires_future
+        CHECK (expires_at > SYSUTCDATETIME())
 );
 GO
 
@@ -178,36 +210,21 @@ CREATE TABLE dbo.audit_logs (
 GO
 
 ---------------------------------------------------------
--- 11. EVENT MEMBERS (FOR GOOGLE SHEETS INTEGRATION)
----------------------------------------------------------
-CREATE TABLE dbo.event_members (
-    id INT IDENTITY(1,1) PRIMARY KEY,
-    event_id INT NOT NULL,
-    student_id NVARCHAR(50) NOT NULL,
-    student_name NVARCHAR(255) NOT NULL,
-    email NVARCHAR(255) NOT NULL,
-    qr_code NVARCHAR(255) NOT NULL UNIQUE,
-    attendance_status BIT NOT NULL DEFAULT 0, -- 0 = chưa điểm danh, 1 = đã điểm danh
-    checkin_time DATETIME2 NULL,
-    created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
-
-    CONSTRAINT fk_event_members_event
-        FOREIGN KEY (event_id)
-        REFERENCES dbo.events(id)
-        ON DELETE CASCADE
-);
-GO
-
----------------------------------------------------------
--- 12. INDEXES (OPTIMIZATION)
+-- 11. INDEXES (OPTIMIZATION)
 ---------------------------------------------------------
 CREATE INDEX idx_users_email ON dbo.users(email);
+CREATE INDEX idx_users_student_code ON dbo.users(student_code);
 CREATE INDEX idx_events_start_time ON dbo.events(start_time);
+CREATE INDEX idx_events_category ON dbo.events(category_id);
 CREATE INDEX idx_reg_user ON dbo.registrations(user_id);
 CREATE INDEX idx_reg_event ON dbo.registrations(event_id);
+CREATE INDEX idx_reg_status ON dbo.registrations(status);
 CREATE INDEX idx_qr_token ON dbo.registrations(qr_token);
-CREATE INDEX idx_event_members_event ON dbo.event_members(event_id);
-CREATE INDEX idx_event_members_qr ON dbo.event_members(qr_code);
+CREATE INDEX idx_attendances_checkin_time ON dbo.attendances(checkin_time);
+CREATE INDEX idx_refresh_tokens_token ON dbo.refresh_tokens(token);
+CREATE INDEX idx_refresh_tokens_expires ON dbo.refresh_tokens(expires_at);
+CREATE INDEX idx_audit_logs_user ON dbo.audit_logs(user_id);
+CREATE INDEX idx_audit_logs_entity ON dbo.audit_logs(entity_name, entity_id);
 GO
 
 /* ================= END OF FILE ================= */

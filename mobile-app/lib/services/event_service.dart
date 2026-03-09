@@ -20,6 +20,8 @@ class EventService extends ChangeNotifier {
       {}; // Track registrations by event ID
 
   Future<void> fetchEvents() async {
+    if (isLoading) return;
+
     isLoading = true;
     errorMessage = null;
     notifyListeners();
@@ -131,6 +133,8 @@ class EventService extends ChangeNotifier {
   }
 
   Future<void> fetchMyEvents() async {
+    if (isLoading) return;
+
     isLoading = true;
     errorMessage = null;
     notifyListeners();

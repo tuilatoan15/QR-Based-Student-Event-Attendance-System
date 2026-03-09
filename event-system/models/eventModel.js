@@ -8,7 +8,9 @@ const createEvent = async ({
   end_time,
   max_participants,
   category_id,
-  created_by
+  created_by,
+  google_sheet_id = null,
+  google_sheet_name = null
 }) => {
   const pool = await poolPromise;
   const result = await pool
@@ -21,9 +23,11 @@ const createEvent = async ({
     .input('max_participants', sql.Int, max_participants)
     .input('category_id', sql.Int, category_id || null)
     .input('created_by', sql.Int, created_by)
+    .input('google_sheet_id', sql.NVarChar(255), google_sheet_id)
+    .input('google_sheet_name', sql.NVarChar(255), google_sheet_name)
     .query(
-      `INSERT INTO events (title, description, location, start_time, end_time, max_participants, category_id, created_by, is_active, created_at)
-       VALUES (@title, @description, @location, @start_time, @end_time, @max_participants, @category_id, @created_by, 1, SYSUTCDATETIME());
+      `INSERT INTO events (title, description, location, start_time, end_time, max_participants, category_id, created_by, google_sheet_id, google_sheet_name, is_active, created_at)
+       VALUES (@title, @description, @location, @start_time, @end_time, @max_participants, @category_id, @created_by, @google_sheet_id, @google_sheet_name, 1, SYSUTCDATETIME());
        SELECT SCOPE_IDENTITY() AS id;`
     );
   return result.recordset[0].id;
@@ -70,6 +74,8 @@ const updateEvent = async (id, fields) => {
   if (fields.end_time != null) req.input('end_time', sql.DateTime2, new Date(fields.end_time));
   if (fields.max_participants != null) req.input('max_participants', sql.Int, fields.max_participants);
   if (fields.category_id != null) req.input('category_id', sql.Int, fields.category_id);
+  if (fields.google_sheet_id != null) req.input('google_sheet_id', sql.NVarChar(255), fields.google_sheet_id);
+  if (fields.google_sheet_name != null) req.input('google_sheet_name', sql.NVarChar(255), fields.google_sheet_name);
   if (fields.is_active !== undefined) req.input('is_active', sql.Bit, fields.is_active ? 1 : 0);
   const updates = [];
   if (fields.title != null) updates.push('title = @title');
@@ -79,6 +85,8 @@ const updateEvent = async (id, fields) => {
   if (fields.end_time != null) updates.push('end_time = @end_time');
   if (fields.max_participants != null) updates.push('max_participants = @max_participants');
   if (fields.category_id != null) updates.push('category_id = @category_id');
+  if (fields.google_sheet_id != null) updates.push('google_sheet_id = @google_sheet_id');
+  if (fields.google_sheet_name != null) updates.push('google_sheet_name = @google_sheet_name');
   if (fields.is_active !== undefined) updates.push('is_active = @is_active');
   if (updates.length === 0) return;
   await req.query(`UPDATE events SET ${updates.join(', ')} WHERE id = @id`);
@@ -92,19 +100,60 @@ const softDeleteEvent = async (id) => {
     .query('UPDATE events SET is_active = 0 WHERE id = @id');
 };
 
+const getEventsByOrganizer = async (created_by, offset = 0, limit = 10) => {
+  const pool = await poolPromise;
+  const result = await pool
+    .request()
+    .input('created_by', sql.Int, created_by)
+    .input('offset', sql.Int, offset)
+    .input('limit', sql.Int, limit)
+    .query(
+      `SELECT e.*, c.name AS category_name
+       FROM events e
+       LEFT JOIN event_categories c ON e.category_id = c.id
+       WHERE e.created_by = @created_by AND e.is_active = 1
+       ORDER BY e.start_time ASC
+       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`
+    );
+  return result.recordset;
+};
+
+const getEventParticipants = async (event_id) => {
+  const pool = await poolPromise;
+  const result = await pool
+    .request()
+    .input('event_id', sql.Int, event_id)
+    .query(
+      `SELECT
+        u.full_name AS student_name,
+        u.student_code,
+        u.email,
+        r.status AS registration_status,
+        a.checkin_time
+       FROM registrations r
+       JOIN users u ON r.user_id = u.id
+       LEFT JOIN attendances a ON a.registration_id = r.id
+       WHERE r.event_id = @event_id
+       ORDER BY r.registered_at ASC`
+    );
+  return result.recordset;
+};
+
 const countRegistrationsForEvent = async (event_id) => {
   const pool = await poolPromise;
   const result = await pool
     .request()
     .input('event_id', sql.Int, event_id)
-    .query('SELECT COUNT(*) AS count FROM registrations WHERE event_id = @event_id');
-  return result.recordset[0].count || 0;
+    .query('SELECT COUNT(*) as count FROM registrations WHERE event_id = @event_id');
+  return result.recordset[0].count;
 };
 
 module.exports = {
   createEvent,
   getAllEvents,
   getEventById,
+  getEventsByOrganizer,
+  getEventParticipants,
   updateEvent,
   softDeleteEvent,
   countRegistrationsForEvent

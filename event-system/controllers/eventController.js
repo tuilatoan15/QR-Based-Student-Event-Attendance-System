@@ -2,6 +2,8 @@ const {
   createEvent,
   getAllEvents,
   getEventById,
+  getEventsByOrganizer,
+  getEventParticipants: getEventParticipantsModel,
   updateEvent,
   softDeleteEvent,
   countRegistrationsForEvent
@@ -15,10 +17,9 @@ const {
   updateRegistrationStatus,
   REGISTRATION_STATUS
 } = require('../models/registrationModel');
-const { generateQrToken, generateQRCodeDataURL } = require('../utils/qrGenerator');
+const qrService = require('../services/qrService');
 const { successResponse, paginatedSuccessResponse, errorResponse } = require('../utils/response');
 const googleSheetService = require('../services/googleSheetService');
-const { createEventMember } = require('../models/eventMemberModel');
 const { findUserById } = require('../models/userModel');
 
 const getEvents = async (req, res, next) => {
@@ -58,6 +59,16 @@ const createEventHandler = async (req, res, next) => {
   try {
     const { title, description, location, start_time, end_time, max_participants, category_id } = req.body;
 
+    // Create Google Sheet first
+    let sheetInfo = null;
+    try {
+      sheetInfo = await googleSheetService.createEventSheet(title);
+    } catch (sheetError) {
+      console.error('Error creating Google Sheet:', sheetError);
+      // Continue with event creation even if sheet fails
+    }
+
+    // Create event in database
     const eventId = await createEvent({
       title,
       description: description || null,
@@ -66,20 +77,32 @@ const createEventHandler = async (req, res, next) => {
       end_time,
       max_participants,
       category_id: category_id || null,
-      created_by: req.user.id
+      created_by: req.user.id,
+      google_sheet_id: sheetInfo ? sheetInfo.sheetId : null,
+      google_sheet_name: sheetInfo ? sheetInfo.sheetName : null
     });
 
-    // Create Google Sheet for the event
-    try {
-      const event = await getEventById(eventId);
-      const sheetInfo = await googleSheetService.createEventSheet(event);
-      // You can store sheetInfo.url in the event record if needed
-    } catch (sheetError) {
-      console.error('Error creating Google Sheet:', sheetError);
-      // Don't fail the event creation if sheet creation fails
+    const response = {
+      id: eventId,
+      title,
+      description,
+      location,
+      start_time,
+      end_time,
+      max_participants,
+      category_id,
+      created_by: req.user.id
+    };
+
+    if (sheetInfo) {
+      response.google_sheet = {
+        id: sheetInfo.sheetId,
+        name: sheetInfo.sheetName,
+        url: sheetInfo.url
+      };
     }
 
-    return successResponse(res, 201, 'Event created successfully', { id: eventId });
+    return successResponse(res, 201, 'Event created successfully', response);
   } catch (err) {
     next(err);
   }
@@ -151,7 +174,7 @@ const registerForEvent = async (req, res, next) => {
       return errorResponse(res, 409, 'Event is full');
     }
 
-    // Get user info for event_members
+    // Get user info for Google Sheet
     const user = await findUserById(userId);
     if (!user) {
       return errorResponse(res, 404, 'User not found');
@@ -165,34 +188,27 @@ const registerForEvent = async (req, res, next) => {
       registration = { ...existing, status: REGISTRATION_STATUS.REGISTERED };
       qr_token = existing.qr_token;
     } else {
-      // New registration
-      qr_token = generateQrToken();
+      // New registration - registration data is stored in registrations table
+      qr_token = qrService.generateQrToken();
       registration = await createRegistration({ user_id: userId, event_id: eventId, qr_token });
     }
 
-    // Create event_member record
-    const eventMemberId = await createEventMember({
-      event_id: eventId,
-      student_id: user.student_code || `USER_${userId}`,
-      student_name: user.full_name,
-      email: user.email,
-      qr_code: qr_token
-    });
-
-    // Add to Google Sheet
+    // Add to Google Sheet (user info is now only stored with registration, not in a separate event_members table)
     try {
-      await googleSheetService.addStudentToSheet(eventId, {
-        student_id: user.student_code || `USER_${userId}`,
-        student_name: user.full_name,
-        email: user.email,
-        qr_code: qr_token
-      });
+      if (event.google_sheet_name) {
+        await googleSheetService.addStudentToSheet(event.google_sheet_name, {
+          student_name: user.full_name,
+          student_code: user.student_code || '',
+          email: user.email,
+          qr_token: qr_token
+        });
+      }
     } catch (sheetError) {
       console.error('Error adding student to Google Sheet:', sheetError);
       // Don't fail registration if sheet update fails
     }
 
-    const qr_code = await generateQRCodeDataURL(qr_token);
+    const qr_code = await qrService.generateQRCodeDataURL(qr_token);
 
     return successResponse(res, 201, 'Registered successfully', {
       registration: { id: registration.id, event_id: eventId, user_id: userId },
@@ -266,6 +282,47 @@ const getEventAttendances = async (req, res, next) => {
   }
 };
 
+const getOrganizerEvents = async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+
+    const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+    const safeLimit = Number.isInteger(limit) && limit > 0 ? limit : 10;
+    const offset = (safePage - 1) * safeLimit;
+
+    const events = await getEventsByOrganizer(req.user.id, offset, safeLimit);
+
+    return paginatedSuccessResponse(res, 200, 'Organizer events retrieved successfully', events, {
+      page: safePage,
+      limit: safeLimit
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getEventParticipants = async (req, res, next) => {
+  try {
+    const eventId = req.params.id;
+
+    // Check if user is the organizer of this event or admin
+    const event = await getEventById(eventId);
+    if (!event) {
+      return errorResponse(res, 404, 'Event not found');
+    }
+
+    if (req.user.role !== 'admin' && event.created_by !== req.user.id) {
+      return errorResponse(res, 403, 'Access denied: You can only view participants of your own events');
+    }
+
+    const participants = await getEventParticipantsModel(eventId);
+    return successResponse(res, 200, 'Event participants retrieved successfully', participants);
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getEvents,
   getEventById: getEventByIdHandler,
@@ -276,5 +333,6 @@ module.exports = {
   cancelRegistration,
   getUserEvents,
   getEventRegistrations,
-  getEventAttendances
+  getOrganizerEvents,
+  getEventParticipants
 };
