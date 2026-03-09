@@ -4,56 +4,127 @@ const {
   hasAttendanceForRegistration,
   REGISTRATION_STATUS
 } = require('../models/registrationModel');
-const { findEventMemberByQrCode, updateAttendanceStatus } = require('../models/eventMemberModel');
+const { getEventById, getAttendancesForEvent } = require('../models/eventModel');
 const { successResponse, errorResponse } = require('../utils/response');
 const { logCheckin } = require('../utils/logger');
 const googleSheetService = require('../services/googleSheetService');
+const qrService = require('../services/qrService');
 
-const checkIn = async (req, res, next) => {
+const scanQr = async (req, res, next) => {
+  const pool = await poolPromise;
+  const transaction = new sql.Transaction(pool);
+
   try {
     const { qr_token: bodyQrToken, qr_code } = req.body;
-    const raw = bodyQrToken || qr_code;
-    if (!raw || typeof raw !== 'string' || !raw.trim()) {
+    let qr_token = bodyQrToken || qr_code;
+
+    if (!qr_token || typeof qr_token !== 'string' || !qr_token.trim()) {
       return errorResponse(res, 400, 'qr_token is required');
     }
 
-    const qr_token = raw.trim();
-    const eventMember = await findEventMemberByQrCode(qr_token);
+    qr_token = qr_token.trim();
 
-    if (!eventMember) {
+    // Extract QR token if it's a full QR code data
+    const extractedToken = qrService.extractQrToken(qr_token);
+    if (extractedToken) {
+      qr_token = extractedToken;
+    }
+
+    // Find registration by QR token
+    const registration = await findRegistrationByQrToken(qr_token);
+
+    if (!registration) {
       return errorResponse(res, 404, 'Invalid QR code');
     }
 
-    if (eventMember.attendance_status === 1) {
+    // Check if already attended
+    if (registration.status === REGISTRATION_STATUS.ATTENDED) {
       return errorResponse(res, 409, 'Already checked in');
     }
 
-    // Update attendance status in database
-    const checkin_time = new Date();
-    await updateAttendanceStatus(eventMember.id, 1, checkin_time);
-
-    // Update Google Sheet
-    try {
-      await googleSheetService.markAttendance(qr_token);
-    } catch (sheetError) {
-      console.error('Error updating Google Sheet:', sheetError);
-      // Don't fail check-in if sheet update fails
+    // Check if attendance record already exists for this registration
+    const hasAttendance = await hasAttendanceForRegistration(registration.id);
+    if (hasAttendance) {
+      return errorResponse(res, 409, 'Already checked in');
     }
 
-    logCheckin(eventMember.id, req.user.id);
+    // Get event details for Google Sheets update
+    const event = await pool.request()
+      .input('event_id', sql.Int, registration.event_id)
+      .query('SELECT google_sheet_name FROM events WHERE id = @event_id');
 
-    return successResponse(res, 200, 'Check-in successful', {
-      event_member_id: eventMember.id,
-      student_name: eventMember.student_name,
-      event_id: eventMember.event_id,
-      checked_in_by: req.user.id,
-      check_in_time: checkin_time
-    });
+    const sheetName = event.recordset[0]?.google_sheet_name;
+
+    // Use transaction for atomicity
+    await transaction.begin();
+
+    try {
+      const request = new sql.Request(transaction);
+
+      // Insert attendance record
+      const attendanceResult = await request
+        .input('registration_id', sql.Int, registration.id)
+        .input('checkin_by', sql.Int, req.user.id)
+        .query(
+          `INSERT INTO attendances (registration_id, checkin_time, checkin_by)
+           OUTPUT INSERTED.checkin_time AS checkin_time
+           VALUES (@registration_id, SYSUTCDATETIME(), @checkin_by)`
+        );
+
+      const checkin_time = attendanceResult.recordset[0].checkin_time;
+
+      // Update registration status to attended
+      await request
+        .input('id', sql.Int, registration.id)
+        .input('status', sql.NVarChar(20), REGISTRATION_STATUS.ATTENDED)
+        .query('UPDATE registrations SET status = @status WHERE id = @id');
+
+      // Commit transaction if both operations succeed
+      await transaction.commit();
+
+      // Update Google Sheet (non-critical, don't fail check-in if this fails)
+      try {
+        if (sheetName) {
+          await googleSheetService.updateAttendanceStatus(sheetName, qr_token);
+        }
+      } catch (sheetError) {
+        console.error('Error updating Google Sheet:', sheetError);
+      }
+
+      logCheckin(registration.id, req.user.id);
+
+      return successResponse(res, 200, 'Check-in successful', {
+        registration_id: registration.id,
+        student_name: registration.full_name,
+        event_id: registration.event_id,
+        event_title: registration.event_title,
+        checked_in_by: req.user.id,
+        check_in_time: checkin_time
+      });
+    } catch (transactionError) {
+      await transaction.rollback();
+      throw transactionError;
+    }
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getEventAttendance = async (req, res, next) => {
+  try {
+    const eventId = req.params.id;
+    const event = await getEventById(eventId);
+    if (!event) {
+      return errorResponse(res, 404, 'Event not found');
+    }
+    const list = await getAttendancesForEvent(eventId);
+    return successResponse(res, 200, 'Attendances retrieved successfully', list);
   } catch (err) {
     next(err);
   }
 };
 
 module.exports = {
-  checkIn
+  scanQr,
+  getEventAttendance
 };
