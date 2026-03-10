@@ -22,6 +22,20 @@ class AuthService extends ChangeNotifier {
   Future<void> loadToken() async {
     final prefs = await SharedPreferences.getInstance();
     _token = prefs.getString('auth_token');
+
+    // Also load user data
+    final userJson = prefs.getString('user_data');
+    if (userJson != null) {
+      try {
+        final userData = jsonDecode(userJson) as Map<String, dynamic>;
+        currentUser = User.fromJson(userData);
+      } catch (e) {
+        // Invalid user data, clear it
+        await prefs.remove('user_data');
+        currentUser = null;
+      }
+    }
+
     notifyListeners();
   }
 
@@ -45,6 +59,8 @@ class AuthService extends ChangeNotifier {
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('auth_token', _token ?? '');
+        await prefs.setString(
+            'user_data', jsonEncode(data['user'])); // Save user data
 
         isLoading = false;
         notifyListeners();
@@ -76,7 +92,8 @@ class AuthService extends ChangeNotifier {
         'full_name': fullName,
         'email': email,
         'password': password,
-        if (studentCode != null && studentCode.isNotEmpty) 'student_code': studentCode,
+        if (studentCode != null && studentCode.isNotEmpty)
+          'student_code': studentCode,
       });
 
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
@@ -89,6 +106,8 @@ class AuthService extends ChangeNotifier {
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('auth_token', _token ?? '');
+        await prefs.setString(
+            'user_data', jsonEncode(data['user'])); // Save user data
 
         isLoading = false;
         notifyListeners();
@@ -110,7 +129,7 @@ class AuthService extends ChangeNotifier {
     _token = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('auth_token');
+    await prefs.remove('user_data'); // Clear user data
     notifyListeners();
   }
 }
-

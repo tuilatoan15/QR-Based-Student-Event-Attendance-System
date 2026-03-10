@@ -62,9 +62,10 @@ const createEventHandler = async (req, res, next) => {
     // Create Google Sheet first
     let sheetInfo = null;
     try {
-      sheetInfo = await googleSheetService.createEventSheet(title);
+      // We'll create the sheet after getting the event ID, so for now just prepare
+      // The sheet will be created after the event is inserted
     } catch (sheetError) {
-      console.error('Error creating Google Sheet:', sheetError);
+      console.error('Error preparing Google Sheet:', sheetError);
       // Continue with event creation even if sheet fails
     }
 
@@ -78,9 +79,23 @@ const createEventHandler = async (req, res, next) => {
       max_participants,
       category_id: category_id || null,
       created_by: req.user.id,
-      google_sheet_id: sheetInfo ? sheetInfo.sheetId : null,
-      google_sheet_name: sheetInfo ? sheetInfo.sheetName : null
+      google_sheet_id: null, // Will update after sheet creation
+      google_sheet_name: null // Will update after sheet creation
     });
+
+    // Now create the Google Sheet with the event ID
+    try {
+      sheetInfo = await googleSheetService.createEventSheet(title, eventId);
+
+      // Update the event with Google Sheet information
+      await updateEvent(eventId, {
+        google_sheet_id: sheetInfo.sheetId,
+        google_sheet_name: sheetInfo.sheetName
+      });
+    } catch (sheetError) {
+      console.error('Error creating Google Sheet:', sheetError);
+      // Event is created but without Google Sheet - could be updated later
+    }
 
     const response = {
       id: eventId,

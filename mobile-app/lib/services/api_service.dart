@@ -53,6 +53,27 @@ class ApiService {
     return http.post(uri, headers: headers, body: jsonEncode(body ?? {}));
   }
 
+  Future<http.Response> put(
+    String path, {
+    Map<String, dynamic>? body,
+    bool? authenticated,
+  }) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final headers = <String, String>{'Content-Type': 'application/json'};
+
+    // Auto-detect if path requires auth, or use explicit flag
+    final needsAuth = authenticated ?? _isProtectedEndpoint(path);
+
+    if (needsAuth) {
+      final token = await _getToken();
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+    }
+
+    return http.put(uri, headers: headers, body: jsonEncode(body ?? {}));
+  }
+
   Future<http.Response> get(
     String path, {
     bool? authenticated,
