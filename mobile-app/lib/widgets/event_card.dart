@@ -7,10 +7,16 @@ class EventCard extends StatelessWidget {
     super.key,
     required this.event,
     this.onTap,
+    this.isOrganizer = false,
+    this.onEdit,
+    this.onDelete,
   });
 
   final Event event;
   final VoidCallback? onTap;
+  final bool isOrganizer;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   String _formatTime(DateTime dateTime) {
     final date = dateTime.toLocal();
@@ -102,7 +108,7 @@ class EventCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: isUpcoming
                           ? theme.colorScheme.primaryContainer
-                          : theme.colorScheme.surfaceVariant,
+                          : theme.colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -155,6 +161,33 @@ class EventCard extends StatelessWidget {
                   ),
                 ],
               ),
+              if (isOrganizer) ...[
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton.icon(
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit, size: 16),
+                      label: const Text('Edit'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: theme.colorScheme.primary,
+                        textStyle: theme.textTheme.labelSmall,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      onPressed: onDelete,
+                      icon: const Icon(Icons.delete, size: 16),
+                      label: const Text('Delete'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: theme.colorScheme.error,
+                        textStyle: theme.textTheme.labelSmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),

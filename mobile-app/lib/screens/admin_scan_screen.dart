@@ -53,11 +53,12 @@ class _AdminScanScreenState extends State<AdminScanScreen> {
         studentName = data['student_name'] as String?;
         eventTitle = data['event_title'] as String?;
         checkinTime = data['check_in_time']?.toString();
-        statusMessage = '✔ Student checked in';
+        statusMessage = '✅ Student checked in successfully!';
       });
     } else {
       setState(() {
-        statusMessage = '❌ ${eventService.errorMessage ?? 'Invalid QR'}';
+        statusMessage =
+            '❌ ${eventService.errorMessage ?? 'Invalid QR code or check-in failed'}';
       });
     }
 

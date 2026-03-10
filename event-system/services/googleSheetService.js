@@ -27,18 +27,21 @@ class GoogleSheetService {
   /**
    * Create a new sheet for an event
    * @param {string} eventTitle - The title of the event
+   * @param {number} eventId - The ID of the event
    * @returns {Object} - Sheet information
    */
-  async createEventSheet(eventTitle) {
+  async createEventSheet(eventTitle, eventId) {
     try {
       await this.authenticate();
       await this.doc.loadInfo();
 
-      // Create a new sheet for the event
-      const sheetName = eventTitle.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').substring(0, 50);
+      // Create a new sheet for the event with format: Event_{eventId}_{eventTitle}
+      const cleanTitle = eventTitle.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
+      const sheetName = `Event_${eventId}_${cleanTitle}`;
+
       const newSheet = await this.doc.addSheet({
         title: sheetName,
-        headerValues: ['Student Name', 'Student Code', 'Email', 'QR Token', 'Attendance Status']
+        headerValues: ['Student Name', 'Student Code', 'Email', 'QR Token', 'Registration Status', 'Attendance Status', 'Check-in Time']
       });
 
       return {
@@ -72,7 +75,9 @@ class GoogleSheetService {
         'Student Code': studentData.student_code || '',
         'Email': studentData.email,
         'QR Token': studentData.qr_token,
-        'Attendance Status': 'Not Attended'
+        'Registration Status': 'Registered',
+        'Attendance Status': 'Not Attended',
+        'Check-in Time': ''
       });
 
     } catch (error) {
@@ -85,8 +90,9 @@ class GoogleSheetService {
    * Update attendance status in Google Sheet
    * @param {string} sheetName - The name of the sheet
    * @param {string} qrToken - The QR token to find
+   * @param {Date} checkinTime - The check-in timestamp
    */
-  async updateAttendanceStatus(sheetName, qrToken) {
+  async updateAttendanceStatus(sheetName, qrToken, checkinTime = new Date()) {
     try {
       await this.authenticate();
       await this.doc.loadInfo();
@@ -104,8 +110,9 @@ class GoogleSheetService {
         throw new Error(`QR token ${qrToken} not found in sheet`);
       }
 
-      // Update attendance status
+      // Update attendance status and check-in time
       targetRow['Attendance Status'] = 'Attended';
+      targetRow['Check-in Time'] = checkinTime.toISOString();
       await targetRow.save();
 
     } catch (error) {

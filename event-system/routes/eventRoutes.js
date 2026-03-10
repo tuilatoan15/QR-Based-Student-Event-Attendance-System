@@ -11,7 +11,9 @@ const {
   deleteEvent,
   registerForEvent,
   cancelRegistration,
-  getEventRegistrations
+  getEventRegistrations,
+  getOrganizerEvents,
+  getEventParticipants
 } = require('../controllers/eventController');
 
 const router = express.Router();
@@ -21,7 +23,7 @@ router.get('/:id', validateId('id'), getEventById);
 
 router.post('/:id/register', validateId('id'), auth, authorizeRoles('student'), registerForEvent);
 router.delete('/:id/register', validateId('id'), auth, authorizeRoles('student'), cancelRegistration);
-router.get('/:id/registrations', validateId('id'), auth, authorizeRoles('admin', 'organizer'), getEventRegistrations);
+router.get('/:id/registrations', validateId('id'), auth, authorizeRoles('admin', 'organizer'), getEventParticipants);
 
 // Event members routes (alternative API structure)
 router.post('/register-event', auth, authorizeRoles('student'), (req, res, next) => {
@@ -31,6 +33,7 @@ router.post('/register-event', auth, authorizeRoles('student'), (req, res, next)
 });
 router.get('/event/:id/members', validateId('id'), auth, authorizeRoles('admin', 'organizer'), getEventRegistrations);
 
+router.get('/organizer/events', auth, authorizeRoles('organizer'), getOrganizerEvents);
 router.post('/', auth, authorizeRoles('admin', 'organizer'), createEventValidation, createEvent);
 router.put('/:id', validateId('id'), auth, authorizeRoles('admin', 'organizer'), updateEventValidation, updateEvent);
 router.delete('/:id', validateId('id'), auth, authorizeRoles('admin', 'organizer'), deleteEvent);

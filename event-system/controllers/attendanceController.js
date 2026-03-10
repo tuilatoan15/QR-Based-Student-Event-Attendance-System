@@ -85,7 +85,7 @@ const scanQr = async (req, res, next) => {
       // Update Google Sheet (non-critical, don't fail check-in if this fails)
       try {
         if (sheetName) {
-          await googleSheetService.updateAttendanceStatus(sheetName, qr_token);
+          await googleSheetService.updateAttendanceStatus(sheetName, qr_token, checkin_time);
         }
       } catch (sheetError) {
         console.error('Error updating Google Sheet:', sheetError);

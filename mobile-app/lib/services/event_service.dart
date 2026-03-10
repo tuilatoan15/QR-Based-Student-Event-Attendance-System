@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../config/api_config.dart';
 import '../models/event.dart';
+import '../models/event_participant.dart';
 import '../models/registration.dart';
 import 'api_service.dart';
 
@@ -14,6 +15,8 @@ class EventService extends ChangeNotifier {
 
   List<Event> events = [];
   List<Event> myEvents = [];
+  List<Event> organizerEvents = [];
+  List<EventParticipant> eventParticipants = [];
   bool isLoading = false;
   String? errorMessage;
   Map<int, Registration?> _registrations =
@@ -201,9 +204,9 @@ class EventService extends ChangeNotifier {
 
     try {
       final response = await _api.post(
-        '/api/attendance/checkin',
+        ApiConfig.scanQrUrl(),
         authenticated: true,
-        body: {'qr_code': qrCode},
+        body: {'qr_token': qrCode},
       );
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
 
@@ -219,5 +222,201 @@ class EventService extends ChangeNotifier {
     isLoading = false;
     notifyListeners();
     return null;
+  }
+
+  // Organizer-specific methods
+
+  Future<void> fetchOrganizerEvents() async {
+    if (isLoading) return;
+
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      final response = await _api.get(
+        ApiConfig.organizerEventsUrl(),
+        authenticated: true,
+      );
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200 && decoded['success'] == true) {
+        final data = decoded['data'] as List<dynamic>? ?? [];
+        organizerEvents =
+            data.map((e) => Event.fromJson(e as Map<String, dynamic>)).toList();
+      } else {
+        errorMessage =
+            decoded['message'] as String? ?? 'Failed to fetch organizer events';
+      }
+    } catch (e) {
+      errorMessage = 'Unable to fetch organizer events. Please try again.';
+    }
+
+    isLoading = false;
+    notifyListeners();
+  }
+
+  Future<Event?> createEvent({
+    required String title,
+    String? description,
+    required String location,
+    required DateTime startTime,
+    required DateTime endTime,
+    required int maxParticipants,
+    int? categoryId,
+  }) async {
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      final response = await _api.post(
+        ApiConfig.eventsUrl(),
+        authenticated: true,
+        body: {
+          'title': title,
+          'description': description,
+          'location': location,
+          'start_time': startTime.toIso8601String(),
+          'end_time': endTime.toIso8601String(),
+          'max_participants': maxParticipants,
+          if (categoryId != null) 'category_id': categoryId,
+        },
+      );
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 201 && decoded['success'] == true) {
+        final data = decoded['data'] as Map<String, dynamic>;
+        final event = Event.fromJson(data);
+        isLoading = false;
+        notifyListeners();
+        return event;
+      } else {
+        errorMessage =
+            decoded['message'] as String? ?? 'Failed to create event';
+      }
+    } catch (e) {
+      errorMessage = 'Unable to create event. Please try again.';
+    }
+
+    isLoading = false;
+    notifyListeners();
+    return null;
+  }
+
+  Future<bool> updateEvent(
+    int eventId, {
+    String? title,
+    String? description,
+    String? location,
+    DateTime? startTime,
+    DateTime? endTime,
+    int? maxParticipants,
+    int? categoryId,
+    bool? isActive,
+  }) async {
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      final updateData = <String, dynamic>{};
+      if (title != null) updateData['title'] = title;
+      if (description != null) updateData['description'] = description;
+      if (location != null) updateData['location'] = location;
+      if (startTime != null) {
+        updateData['start_time'] = startTime.toIso8601String();
+      }
+      if (endTime != null) {
+        updateData['end_time'] = endTime.toIso8601String();
+      }
+      if (maxParticipants != null) {
+        updateData['max_participants'] = maxParticipants;
+      }
+      if (categoryId != null) updateData['category_id'] = categoryId;
+      if (isActive != null) updateData['is_active'] = isActive;
+
+      final response = await _api.put(
+        '${ApiConfig.eventsUrl()}/$eventId',
+        authenticated: true,
+        body: updateData,
+      );
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200 && decoded['success'] == true) {
+        isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        errorMessage =
+            decoded['message'] as String? ?? 'Failed to update event';
+      }
+    } catch (e) {
+      errorMessage = 'Unable to update event. Please try again.';
+    }
+
+    isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> deleteEvent(int eventId) async {
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      final response = await _api.delete(
+        '${ApiConfig.eventsUrl()}/$eventId',
+        authenticated: true,
+      );
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200 && decoded['success'] == true) {
+        // Remove from organizer events list
+        organizerEvents.removeWhere((event) => event.id == eventId);
+        isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        errorMessage =
+            decoded['message'] as String? ?? 'Failed to delete event';
+      }
+    } catch (e) {
+      errorMessage = 'Unable to delete event. Please try again.';
+    }
+
+    isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  Future<void> fetchEventParticipants(int eventId) async {
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      final response = await _api.get(
+        ApiConfig.eventParticipantsUrl(eventId),
+        authenticated: true,
+      );
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200 && decoded['success'] == true) {
+        final data = decoded['data'] as List<dynamic>? ?? [];
+        eventParticipants = data
+            .map((p) => EventParticipant.fromJson(p as Map<String, dynamic>))
+            .toList();
+      } else {
+        errorMessage =
+            decoded['message'] as String? ?? 'Failed to fetch participants';
+      }
+    } catch (e) {
+      errorMessage = 'Unable to fetch participants. Please try again.';
+    }
+
+    isLoading = false;
+    notifyListeners();
   }
 }
