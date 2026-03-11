@@ -28,11 +28,22 @@ class AuthService extends ChangeNotifier {
     if (userJson != null) {
       try {
         final userData = jsonDecode(userJson) as Map<String, dynamic>;
-        currentUser = User.fromJson(userData);
+        final loadedUser = User.fromJson(userData);
+        final role = loadedUser.role.toLowerCase();
+        // Only keep session for student users
+        if (role == 'student' || role == '3') {
+          currentUser = loadedUser;
+        } else {
+          await prefs.remove('auth_token');
+          await prefs.remove('user_data');
+          _token = null;
+          currentUser = null;
+        }
       } catch (e) {
-        // Invalid user data, clear it
+        await prefs.remove('auth_token');
         await prefs.remove('user_data');
         currentUser = null;
+        _token = null;
       }
     }
 
@@ -54,17 +65,29 @@ class AuthService extends ChangeNotifier {
 
       if (response.statusCode == 200 && decoded['success'] == true) {
         final data = decoded['data'] as Map<String, dynamic>;
-        _token = data['token'] as String?;
-        currentUser = User.fromJson(data['user'] as Map<String, dynamic>);
+        final userJson = data['user'] as Map<String, dynamic>;
+        final user = User.fromJson(userJson);
+        final role = user.role.toLowerCase();
 
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('auth_token', _token ?? '');
-        await prefs.setString(
-            'user_data', jsonEncode(data['user'])); // Save user data
+        if (role != 'student' && role != '3') {
+          // Block non-student roles on mobile app
+          errorMessage =
+              'Only students are allowed to use the mobile application.';
+          // Ensure no token/session is stored
+          currentUser = null;
+          _token = null;
+        } else {
+          _token = data['token'] as String?;
+          currentUser = user;
 
-        isLoading = false;
-        notifyListeners();
-        return true;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('auth_token', _token ?? '');
+          await prefs.setString('user_data', jsonEncode(userJson));
+
+          isLoading = false;
+          notifyListeners();
+          return true;
+        }
       } else {
         errorMessage = decoded['message'] as String? ?? 'Login failed';
       }

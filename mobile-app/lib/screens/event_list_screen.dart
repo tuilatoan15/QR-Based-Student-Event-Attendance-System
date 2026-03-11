@@ -7,7 +7,6 @@ import '../widgets/event_card.dart';
 import 'event_detail_screen.dart';
 import 'login_screen.dart';
 import 'my_events_screen.dart';
-import 'admin_scan_screen.dart';
 
 class EventListScreen extends StatefulWidget {
   const EventListScreen({super.key});
@@ -35,14 +34,6 @@ class _EventListScreenState extends State<EventListScreen> {
       appBar: AppBar(
         title: const Text('Events'),
         actions: [
-          if (context.read<AuthService>().currentUser?.role == 'admin')
-            IconButton(
-              icon: const Icon(Icons.qr_code_scanner),
-              tooltip: 'Scan QR for Attendance',
-              onPressed: () {
-                Navigator.of(context).pushNamed(AdminScanScreen.routeName);
-              },
-            ),
           IconButton(
             icon: const Icon(Icons.event_available),
             onPressed: () {

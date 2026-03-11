@@ -38,7 +38,10 @@ class ApiService {
     bool? authenticated,
   }) async {
     final uri = Uri.parse('$baseUrl$path');
-    final headers = <String, String>{'Content-Type': 'application/json'};
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'X-Client': 'mobile-app',
+    };
 
     // Auto-detect if path requires auth, or use explicit flag
     final needsAuth = authenticated ?? _isProtectedEndpoint(path);
@@ -59,7 +62,10 @@ class ApiService {
     bool? authenticated,
   }) async {
     final uri = Uri.parse('$baseUrl$path');
-    final headers = <String, String>{'Content-Type': 'application/json'};
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'X-Client': 'mobile-app',
+    };
 
     // Auto-detect if path requires auth, or use explicit flag
     final needsAuth = authenticated ?? _isProtectedEndpoint(path);
@@ -79,7 +85,10 @@ class ApiService {
     bool? authenticated,
   }) async {
     final uri = Uri.parse('$baseUrl$path');
-    final headers = <String, String>{'Content-Type': 'application/json'};
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'X-Client': 'mobile-app',
+    };
 
     // Auto-detect if path requires auth, or use explicit flag
     final needsAuth = authenticated ?? _isProtectedEndpoint(path);
@@ -99,7 +108,10 @@ class ApiService {
     bool? authenticated,
   }) async {
     final uri = Uri.parse('$baseUrl$path');
-    final headers = <String, String>{'Content-Type': 'application/json'};
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'X-Client': 'mobile-app',
+    };
 
     // Auto-detect if path requires auth, or use explicit flag
     final needsAuth = authenticated ?? _isProtectedEndpoint(path);
