@@ -37,7 +37,12 @@ const EventTable: React.FC<Props> = ({ events, onDelete }) => {
           {events.map((event) => (
             <tr key={event.id} className="hover:bg-slate-50">
               <td className="px-4 py-2 text-sm text-slate-800">
-                {event.title}
+                <Link
+                  to={`/events/${event.id}`}
+                  className="text-indigo-600 hover:underline"
+                >
+                  {event.title}
+                </Link>
               </td>
               <td className="px-4 py-2 text-sm text-slate-600">
                 {event.location}
@@ -59,10 +64,10 @@ const EventTable: React.FC<Props> = ({ events, onDelete }) => {
                   Edit
                 </Link>
                 <Link
-                  to={`/events/${event.id}/registrations`}
+                  to={`/events/${event.id}/participants`}
                   className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-800 hover:bg-slate-200"
                 >
-                  Registrations
+                  Participants
                 </Link>
                 <Link
                   to={`/qr-scanner?eventId=${event.id}`}

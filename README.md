@@ -21,10 +21,10 @@ This system allows students to browse events, register, and present a QR token a
 
 ```mermaid
 flowchart TD
-  M[Flutter Mobile App\n(Student only)] -->|REST + JWT| API[Node.js / Express API]
-  W[React Web Admin Dashboard\n(Admin/Organizer)] -->|REST + JWT| API
+  M["Flutter Mobile App (Student only)"] -->|"REST + JWT"| API["Node.js / Express API"]
+  W["React Web Admin Dashboard (Admin/Organizer)"] -->|"REST + JWT"| API
   API --> DB[(SQL Server)]
-  API --> GS[(Google Sheets\n(optional))]
+  API --> GS["Google Sheets (optional)"]
 ```
 
 ### Data flows

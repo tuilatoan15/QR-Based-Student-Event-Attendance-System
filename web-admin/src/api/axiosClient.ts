@@ -1,16 +1,18 @@
 import axios from 'axios';
 
+// Use relative base URL so the frontend can be served behind any host,
+// with the backend mounted at /api (matches backend configuration).
 const axiosClient = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: '/api',
 });
 
 axiosClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('admin_token');
   if (token) {
-    config.headers = {
-      ...(config.headers ?? {}),
+    (config.headers as any) = {
+      ...(config.headers as any),
       Authorization: `Bearer ${token}`,
-    } as any;
+    };
   }
   return config;
 });
