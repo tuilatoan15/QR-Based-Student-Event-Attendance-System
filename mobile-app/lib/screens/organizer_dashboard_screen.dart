@@ -7,6 +7,7 @@ import '../widgets/event_card.dart';
 import 'create_event_screen.dart';
 import 'event_participants_screen.dart';
 import 'login_screen.dart';
+import 'admin_scan_screen.dart';
 
 class OrganizerDashboardScreen extends StatefulWidget {
   const OrganizerDashboardScreen({super.key});
@@ -115,6 +116,12 @@ class _OrganizerDashboardScreenState extends State<OrganizerDashboardScreen> {
                             return EventCard(
                               event: event,
                               isOrganizer: true,
+                              onTap: () {
+                                Navigator.of(context).pushNamed(
+                                  EventParticipantsScreen.routeName,
+                                  arguments: event,
+                                );
+                              },
                               onEdit: () {
                                 Navigator.of(context)
                                     .pushNamed(
@@ -174,11 +181,15 @@ class _OrganizerDashboardScreenState extends State<OrganizerDashboardScreen> {
                                   }
                                 }
                               },
-                              onTap: () {
+                              onViewRegistrations: () {
                                 Navigator.of(context).pushNamed(
                                   EventParticipantsScreen.routeName,
                                   arguments: event,
                                 );
+                              },
+                              onScanQr: () {
+                                Navigator.of(context)
+                                    .pushNamed(AdminScanScreen.routeName);
                               },
                             );
                           },

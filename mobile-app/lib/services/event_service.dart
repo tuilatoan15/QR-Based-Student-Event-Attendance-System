@@ -238,15 +238,43 @@ class EventService extends ChangeNotifier {
         ApiConfig.organizerEventsUrl(),
         authenticated: true,
       );
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final decoded = jsonDecode(response.body);
 
-      if (response.statusCode == 200 && decoded['success'] == true) {
-        final data = decoded['data'] as List<dynamic>? ?? [];
-        organizerEvents =
-            data.map((e) => Event.fromJson(e as Map<String, dynamic>)).toList();
-      } else {
+      if (response.statusCode == 200) {
+        // Backend may return either a wrapped object or a raw list
+        List<dynamic> rawList;
+
+        if (decoded is List) {
+          rawList = decoded;
+        } else if (decoded is Map<String, dynamic>) {
+          if (decoded['success'] == true &&
+              decoded['data'] is List<dynamic>) {
+            rawList = decoded['data'] as List<dynamic>;
+          } else if (decoded['events'] is List<dynamic>) {
+            rawList = decoded['events'] as List<dynamic>;
+          } else {
+            errorMessage = decoded['message'] as String? ??
+                'Failed to fetch organizer events';
+            isLoading = false;
+            notifyListeners();
+            return;
+          }
+        } else {
+          errorMessage = 'Failed to parse organizer events response';
+          isLoading = false;
+          notifyListeners();
+          return;
+        }
+
+        organizerEvents = rawList
+            .whereType<Map<String, dynamic>>()
+            .map(Event.fromJson)
+            .toList();
+      } else if (decoded is Map<String, dynamic>) {
         errorMessage =
             decoded['message'] as String? ?? 'Failed to fetch organizer events';
+      } else {
+        errorMessage = 'Failed to fetch organizer events';
       }
     } catch (e) {
       errorMessage = 'Unable to fetch organizer events. Please try again.';

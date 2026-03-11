@@ -33,7 +33,7 @@ router.post('/register-event', auth, authorizeRoles('student'), (req, res, next)
 });
 router.get('/event/:id/members', validateId('id'), auth, authorizeRoles('admin', 'organizer'), getEventRegistrations);
 
-router.get('/organizer/events', auth, authorizeRoles('organizer'), getOrganizerEvents);
+router.get('/organizer/events', auth, authorizeRoles('admin', 'organizer'), getOrganizerEvents);
 router.post('/', auth, authorizeRoles('admin', 'organizer'), createEventValidation, createEvent);
 router.put('/:id', validateId('id'), auth, authorizeRoles('admin', 'organizer'), updateEventValidation, updateEvent);
 router.delete('/:id', validateId('id'), auth, authorizeRoles('admin', 'organizer'), deleteEvent);

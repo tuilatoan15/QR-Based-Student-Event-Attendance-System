@@ -83,7 +83,8 @@ class _AppRouter extends StatelessWidget {
         }
 
         // Route based on user role
-        if (authService.currentUser?.role == 'organizer') {
+        final role = authService.currentUser?.role.toLowerCase();
+        if (role == 'admin' || role == 'organizer') {
           return const OrganizerDashboardScreen();
         }
 

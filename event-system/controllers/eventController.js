@@ -306,9 +306,16 @@ const getOrganizerEvents = async (req, res, next) => {
     const safeLimit = Number.isInteger(limit) && limit > 0 ? limit : 10;
     const offset = (safePage - 1) * safeLimit;
 
-    const events = await getEventsByOrganizer(req.user.id, offset, safeLimit);
+    let events;
+    if (req.user.role === 'admin') {
+      // Admins can see all events
+      events = await getAllEvents(offset, safeLimit);
+    } else {
+      // Organizers see only their own events
+      events = await getEventsByOrganizer(req.user.id, offset, safeLimit);
+    }
 
-    return paginatedSuccessResponse(res, 200, 'Organizer events retrieved successfully', events, {
+    return paginatedSuccessResponse(res, 200, 'Events retrieved successfully', events, {
       page: safePage,
       limit: safeLimit
     });

@@ -80,13 +80,25 @@ VALUES
 GO
 
 ---------------------------------------------------------
--- 5. EVENT CATEGORIES
+-- 6. SAMPLE EVENT CATEGORIES
 ---------------------------------------------------------
-CREATE TABLE dbo.event_categories (
-    id INT IDENTITY(1,1) PRIMARY KEY,
-    name NVARCHAR(100) NOT NULL UNIQUE,
-    description NVARCHAR(255) NULL
-);
+INSERT INTO dbo.event_categories (name, description)
+VALUES 
+('Academic', 'Academic events and lectures'),
+('Sports', 'Sports and recreational activities'),
+('Cultural', 'Cultural and artistic events'),
+('Technology', 'Technology and innovation events');
+GO
+
+---------------------------------------------------------
+-- 7. SAMPLE EVENTS
+---------------------------------------------------------
+INSERT INTO dbo.events (title, description, location, start_time, end_time, max_participants, category_id, created_by)
+VALUES 
+('Introduction to Flutter Development', 'Learn the basics of Flutter mobile app development', 'Room 101', '2024-12-01 10:00:00', '2024-12-01 12:00:00', 50, 4, 2),
+('Campus Basketball Tournament', 'Annual inter-department basketball championship', 'Sports Center', '2024-12-05 14:00:00', '2024-12-05 18:00:00', 100, 2, 2),
+('Cultural Festival 2024', 'Celebrating diversity through music, dance and food', 'Main Auditorium', '2024-12-10 18:00:00', '2024-12-10 22:00:00', 200, 3, 2),
+('AI and Machine Learning Workshop', 'Hands-on workshop on AI/ML fundamentals', 'Computer Lab', '2024-12-15 09:00:00', '2024-12-15 17:00:00', 30, 4, 2);
 GO
 
 ---------------------------------------------------------
@@ -122,7 +134,7 @@ CREATE TABLE dbo.events (
 GO
 
 ---------------------------------------------------------
--- 7. REGISTRATIONS
+-- 8. REGISTRATIONS
 ---------------------------------------------------------
 CREATE TABLE dbo.registrations (
     id INT IDENTITY(1,1) PRIMARY KEY,
@@ -149,7 +161,7 @@ CREATE TABLE dbo.registrations (
 GO
 
 ---------------------------------------------------------
--- 8. ATTENDANCES (CHECK-IN)
+-- 9. ATTENDANCES (CHECK-IN)
 ---------------------------------------------------------
 CREATE TABLE dbo.attendances (
     id INT IDENTITY(1,1) PRIMARY KEY,
@@ -171,7 +183,7 @@ CREATE TABLE dbo.attendances (
 GO
 
 ---------------------------------------------------------
--- 9. REFRESH TOKENS (JWT)
+-- 10. REFRESH TOKENS (JWT)
 ---------------------------------------------------------
 CREATE TABLE dbo.refresh_tokens (
     id INT IDENTITY(1,1) PRIMARY KEY,
@@ -193,7 +205,7 @@ CREATE TABLE dbo.refresh_tokens (
 GO
 
 ---------------------------------------------------------
--- 10. AUDIT LOGS
+-- 11. AUDIT LOGS
 ---------------------------------------------------------
 CREATE TABLE dbo.audit_logs (
     id INT IDENTITY(1,1) PRIMARY KEY,
@@ -210,7 +222,7 @@ CREATE TABLE dbo.audit_logs (
 GO
 
 ---------------------------------------------------------
--- 11. INDEXES (OPTIMIZATION)
+-- 12. INDEXES (OPTIMIZATION)
 ---------------------------------------------------------
 CREATE INDEX idx_users_email ON dbo.users(email);
 CREATE INDEX idx_users_student_code ON dbo.users(student_code);
