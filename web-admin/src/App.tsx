@@ -9,6 +9,8 @@ import CreateEventPage from './pages/CreateEventPage';
 import EditEventPage from './pages/EditEventPage';
 import EventRegistrationsPage from './pages/EventRegistrationsPage';
 import QRScannerPage from './pages/QRScannerPage';
+import AttendanceHistoryPage from './pages/AttendanceHistoryPage';
+import EventDetailPage from './pages/EventDetailPage';
 
 const App: React.FC = () => {
   return (
@@ -26,12 +28,17 @@ const App: React.FC = () => {
         <Route index element={<DashboardPage />} />
         <Route path="events" element={<EventsPage />} />
         <Route path="events/create" element={<CreateEventPage />} />
+        <Route path="events/:id" element={<EventDetailPage />} />
         <Route path="events/:id/edit" element={<EditEventPage />} />
         <Route
-          path="events/:id/registrations"
+          path="events/:id/participants"
           element={<EventRegistrationsPage />}
         />
         <Route path="qr-scanner" element={<QRScannerPage />} />
+        <Route
+          path="attendance/event/:id"
+          element={<AttendanceHistoryPage />}
+        />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

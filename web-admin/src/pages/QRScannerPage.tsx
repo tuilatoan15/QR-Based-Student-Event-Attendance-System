@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-// eslint-disable-next-line import/no-unresolved
 import { QrReader } from 'react-qr-reader';
 import { attendanceApi } from '../api/attendanceApi';
 
@@ -18,14 +17,15 @@ const QRScannerPage: React.FC = () => {
     setError(null);
     try {
       const res = await attendanceApi.checkIn(data);
-      const msg =
-        res.data?.message ||
-        res.data?.data?.message ||
-        'Check-in successful';
-      setLastResult(msg);
+      const message = res.data?.message || 'Check-in successful';
+      setLastResult(message);
     } catch (err: any) {
+      const backendMessage = err?.response?.data?.message;
+      // Surface specific backend messages for better UX:
+      // - "Already checked in"
+      // - "Invalid QR code"
       setError(
-        err?.response?.data?.message ||
+        backendMessage ||
           'Check-in failed. Please try again or verify the QR code.',
       );
     } finally {
@@ -38,17 +38,18 @@ const QRScannerPage: React.FC = () => {
       <h2 className="text-xl font-semibold text-slate-800">QR Scanner</h2>
       {eventId && (
         <p className="text-sm text-slate-600">
-          Scanning for event ID: <span className="font-semibold">{eventId}</span>
+          Scanning for event ID:{' '}
+          <span className="font-semibold">{eventId}</span>
         </p>
       )}
       <div className="max-w-md rounded-lg bg-white p-4 shadow">
         <QrReader
           constraints={{ facingMode: 'environment' }}
           onResult={(result, err) => {
-            if (!!result) {
+            if (result) {
               void handleScan(result.getText());
             } else if (err) {
-              // ignore continuous errors to avoid noise
+              // ignore continuous decoding errors
             }
           }}
           containerStyle={{ width: '100%' }}
