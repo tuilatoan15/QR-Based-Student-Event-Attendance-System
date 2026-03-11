@@ -88,6 +88,18 @@ const login = async (req, res, next) => {
       return errorResponse(res, 401, 'Invalid credentials');
     }
 
+    // If request comes from mobile client, block non-student roles
+    const client = (req.headers['x-client'] || '').toString().toLowerCase();
+    const roleName = (user.role_name || '').toLowerCase();
+    if (client === 'mobile-app' && roleName !== 'student') {
+      logAuthAttempt(email, false);
+      return errorResponse(
+        res,
+        403,
+        'Admins and organizers must use the web admin dashboard.',
+      );
+    }
+
     logAuthAttempt(email, true);
     const token = generateToken(user);
 

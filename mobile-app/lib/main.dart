@@ -10,10 +10,7 @@ import 'screens/event_list_screen.dart';
 import 'screens/event_detail_screen.dart';
 import 'screens/my_events_screen.dart';
 import 'screens/qr_screen.dart';
-import 'screens/admin_scan_screen.dart';
-import 'screens/organizer_dashboard_screen.dart';
-import 'screens/create_event_screen.dart';
-import 'screens/event_participants_screen.dart';
+// Admin/organizer features are now handled in the web dashboard only.
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,12 +46,6 @@ class SmartEventAttendanceApp extends StatelessWidget {
           EventDetailScreen.routeName: (context) => const EventDetailScreen(),
           MyEventsScreen.routeName: (context) => const MyEventsScreen(),
           QRScreen.routeName: (context) => const QRScreen(),
-          AdminScanScreen.routeName: (context) => const AdminScanScreen(),
-          OrganizerDashboardScreen.routeName: (context) =>
-              const OrganizerDashboardScreen(),
-          CreateEventScreen.routeName: (context) => const CreateEventScreen(),
-          EventParticipantsScreen.routeName: (context) =>
-              const EventParticipantsScreen(),
         },
       ),
     );
@@ -82,12 +73,14 @@ class _AppRouter extends StatelessWidget {
           return const LoginScreen();
         }
 
-        // Route based on user role
-        if (authService.currentUser?.role == 'organizer') {
-          return const OrganizerDashboardScreen();
+        // Only students are allowed to use the mobile application
+        final role = authService.currentUser?.role.toLowerCase();
+        if (role == 'student' || role == '3') {
+          return const EventListScreen();
         }
 
-        return const EventListScreen();
+        // Any non-student user is treated as unauthenticated for mobile app
+        return const LoginScreen();
       },
     );
   }
