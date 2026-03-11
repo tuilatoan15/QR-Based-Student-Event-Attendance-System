@@ -5,7 +5,6 @@ import '../services/auth_service.dart';
 import '../widgets/primary_button.dart';
 import 'event_list_screen.dart';
 import 'register_screen.dart';
-import 'organizer_dashboard_screen.dart'; // destination for admin/organizer
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -53,26 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (success) {
       // Clear error message on success
       auth.errorMessage = null;
-
-      // decide destination based on role (API returns either role string or id)
-      final user = auth.currentUser;
-      if (user != null) {
-        // prefer string role if available
-        final roleString = user.role.toLowerCase();
-        if (roleString == 'student' || roleString == '3') {
-          // student should see events list
-          Navigator.of(context)
-              .pushReplacementNamed(EventListScreen.routeName);
-        } else {
-          // admin & organizer -> dashboard
-          Navigator.of(context)
-              .pushReplacementNamed(OrganizerDashboardScreen.routeName);
-        }
-      } else {
-        // fallback
-        Navigator.of(context)
-            .pushReplacementNamed(EventListScreen.routeName);
-      }
+      Navigator.of(context).pushReplacementNamed(EventListScreen.routeName);
     } else {
       // Error message is already set in AuthService
       setState(() {});
