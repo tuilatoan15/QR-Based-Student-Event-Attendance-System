@@ -10,6 +10,8 @@ class EventCard extends StatelessWidget {
     this.isOrganizer = false,
     this.onEdit,
     this.onDelete,
+    this.onViewRegistrations,
+    this.onScanQr,
   });
 
   final Event event;
@@ -17,6 +19,8 @@ class EventCard extends StatelessWidget {
   final bool isOrganizer;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+  final VoidCallback? onViewRegistrations;
+  final VoidCallback? onScanQr;
 
   String _formatTime(DateTime dateTime) {
     final date = dateTime.toLocal();
@@ -163,29 +167,51 @@ class EventCard extends StatelessWidget {
               ),
               if (isOrganizer) ...[
                 const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton.icon(
-                      onPressed: onEdit,
-                      icon: const Icon(Icons.edit, size: 16),
-                      label: const Text('Edit'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: theme.colorScheme.primary,
-                        textStyle: theme.textTheme.labelSmall,
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    alignment: WrapAlignment.end,
+                    children: [
+                      TextButton.icon(
+                        onPressed: onEdit,
+                        icon: const Icon(Icons.edit, size: 16),
+                        label: const Text('Edit'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: theme.colorScheme.primary,
+                          textStyle: theme.textTheme.labelSmall,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton.icon(
-                      onPressed: onDelete,
-                      icon: const Icon(Icons.delete, size: 16),
-                      label: const Text('Delete'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: theme.colorScheme.error,
-                        textStyle: theme.textTheme.labelSmall,
+                      TextButton.icon(
+                        onPressed: onDelete,
+                        icon: const Icon(Icons.delete, size: 16),
+                        label: const Text('Delete'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: theme.colorScheme.error,
+                          textStyle: theme.textTheme.labelSmall,
+                        ),
                       ),
-                    ),
-                  ],
+                      TextButton.icon(
+                        onPressed: onViewRegistrations,
+                        icon: const Icon(Icons.people_alt_outlined, size: 16),
+                        label: const Text('View Registrations'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: theme.colorScheme.secondary,
+                          textStyle: theme.textTheme.labelSmall,
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: onScanQr,
+                        icon: const Icon(Icons.qr_code_scanner, size: 16),
+                        label: const Text('Scan QR'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: theme.colorScheme.primary,
+                          textStyle: theme.textTheme.labelSmall,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ],
