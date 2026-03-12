@@ -55,9 +55,80 @@ const getRoleIdByName = async (name) => {
   return result.recordset[0] ? result.recordset[0].id : null;
 };
 
+const listUsers = async ({ offset = 0, limit = 50, search = '' } = {}) => {
+  const pool = await poolPromise;
+  const term = (search || '').trim();
+
+  const request = pool
+    .request()
+    .input('offset', sql.Int, offset)
+    .input('limit', sql.Int, limit);
+
+  let whereSql = '';
+  if (term) {
+    request.input('search', sql.NVarChar(255), `%${term}%`);
+    whereSql = 'WHERE (u.full_name LIKE @search OR u.email LIKE @search OR u.student_code LIKE @search)';
+  }
+
+  const result = await request.query(
+    `SELECT u.id, u.full_name, u.email, u.student_code, u.is_active, u.created_at, u.updated_at,
+            r.name AS role_name
+     FROM users u
+     JOIN roles r ON u.role_id = r.id
+     ${whereSql}
+     ORDER BY u.created_at DESC
+     OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`
+  );
+  return result.recordset;
+};
+
+const countUsers = async ({ search = '' } = {}) => {
+  const pool = await poolPromise;
+  const term = (search || '').trim();
+  const request = pool.request();
+  let whereSql = '';
+  if (term) {
+    request.input('search', sql.NVarChar(255), `%${term}%`);
+    whereSql = 'WHERE (full_name LIKE @search OR email LIKE @search OR student_code LIKE @search)';
+  }
+
+  const result = await request.query(
+    `SELECT COUNT(1) AS total
+     FROM users
+     ${whereSql}`
+  );
+  return result.recordset[0]?.total ?? 0;
+};
+
+const setUserRoleByName = async (userId, roleName) => {
+  const pool = await poolPromise;
+  const roleId = await getRoleIdByName(roleName);
+  if (!roleId) return false;
+
+  await pool
+    .request()
+    .input('id', sql.Int, userId)
+    .input('role_id', sql.Int, roleId)
+    .query('UPDATE users SET role_id = @role_id, updated_at = SYSUTCDATETIME() WHERE id = @id');
+  return true;
+};
+
+const setUserActive = async (userId, isActive) => {
+  const pool = await poolPromise;
+  await pool
+    .request()
+    .input('id', sql.Int, userId)
+    .input('is_active', sql.Bit, isActive ? 1 : 0)
+    .query('UPDATE users SET is_active = @is_active, updated_at = SYSUTCDATETIME() WHERE id = @id');
+};
+
 module.exports = {
   createUser,
   findUserByEmail,
   findUserById,
-  getRoleIdByName
+  getRoleIdByName,
+  listUsers,
+  countUsers,
+  setUserRoleByName,
+  setUserActive
 };

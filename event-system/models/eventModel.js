@@ -125,11 +125,13 @@ const getEventParticipants = async (event_id) => {
     .input('event_id', sql.Int, event_id)
     .query(
       `SELECT
+        r.id AS registration_id,
+        r.user_id,
         u.full_name AS student_name,
         u.student_code,
         u.email,
         r.status AS registration_status,
-        a.checkin_time
+        a.check_in_time
        FROM registrations r
        JOIN users u ON r.user_id = u.id
        LEFT JOIN attendances a ON a.registration_id = r.id

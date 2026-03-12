@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import toast from 'react-hot-toast';
 
 const LoginPage: React.FC = () => {
   const { login, loading } = useAuth();
@@ -19,53 +20,61 @@ const LoginPage: React.FC = () => {
       const message =
         err?.response?.data?.message || 'Login failed. Please try again.';
       setError(message);
+      toast.error(message);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-100">
-      <div className="w-full max-w-md rounded-xl bg-white p-8 shadow">
-        <h2 className="mb-6 text-center text-2xl font-semibold text-slate-800">
-          Admin / Organizer Login
-        </h2>
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-indigo-700">
+      <div className="flex min-h-screen items-center justify-center px-4 py-10">
+        <div className="w-full max-w-md rounded-2xl bg-white p-10 shadow-xl">
+          <h2 className="text-center text-3xl font-bold text-slate-900">
+            Admin Login
+          </h2>
+          <p className="mb-6 mt-2 text-center text-gray-500">
+            Sign in to manage events and attendance
+          </p>
         {error && (
-          <div className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-            {error}
-          </div>
+            <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
         )}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
-              Email
-            </label>
-            <input
-              type="email"
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
-              Password
-            </label>
-            <input
-              type="password"
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex w-full justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
-          >
-            {loading ? 'Logging in...' : 'Login'}
-          </button>
-        </form>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Email
+              </label>
+              <input
+                type="email"
+                autoComplete="email"
+                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Password
+              </label>
+              <input
+                type="password"
+                autoComplete="current-password"
+                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+            >
+              {loading ? 'Logging in...' : 'Login'}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );

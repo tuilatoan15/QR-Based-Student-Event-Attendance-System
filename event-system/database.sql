@@ -1,12 +1,6 @@
 /* =====================================================
    QR BASED STUDENT EVENT ATTENDANCE SYSTEM DATABASE
-   =====================================================
-   Refactored for production readiness:
-   - Removed redundant event_members table (logic covered by registrations/attendances)
-   - Added proper constraints, indexes, and timestamps
-   - Normalized schema with relational integrity
-   - Added CHECK constraints for data validation
-   - Optimized indexes for common REST API queries
+   Production Ready Version
    ===================================================== */
 
 ---------------------------------------------------------
@@ -15,7 +9,7 @@
 IF DB_ID('event_system') IS NULL
 BEGIN
     CREATE DATABASE event_system;
-END;
+END
 GO
 
 USE event_system;
@@ -33,210 +27,179 @@ IF OBJECT_ID('dbo.event_categories', 'U') IS NOT NULL DROP TABLE dbo.event_categ
 IF OBJECT_ID('dbo.users', 'U') IS NOT NULL DROP TABLE dbo.users;
 IF OBJECT_ID('dbo.roles', 'U') IS NOT NULL DROP TABLE dbo.roles;
 GO
----------------------------------------------------------
 
 ---------------------------------------------------------
 -- 3. ROLES
 ---------------------------------------------------------
-CREATE TABLE dbo.roles (
-    id INT IDENTITY(1,1) PRIMARY KEY,
-    name NVARCHAR(50) NOT NULL UNIQUE
+CREATE TABLE roles (
+    id INT IDENTITY PRIMARY KEY,
+    name NVARCHAR(50) UNIQUE NOT NULL
 );
 GO
 
-INSERT INTO dbo.roles (name)
+INSERT INTO roles (name)
 VALUES ('admin'), ('organizer'), ('student');
 GO
 
 ---------------------------------------------------------
 -- 4. USERS
 ---------------------------------------------------------
-CREATE TABLE dbo.users (
-    id INT IDENTITY(1,1) PRIMARY KEY,
+CREATE TABLE users (
+    id INT IDENTITY PRIMARY KEY,
     full_name NVARCHAR(255) NOT NULL,
-    email NVARCHAR(255) NOT NULL UNIQUE,
+    email NVARCHAR(255) UNIQUE NOT NULL,
     password_hash NVARCHAR(255) NOT NULL,
-    student_code NVARCHAR(50) NULL,
+    student_code NVARCHAR(50),
     role_id INT NOT NULL,
-    is_active BIT NOT NULL DEFAULT 1,
-    created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
-    updated_at DATETIME2 NULL,
+    is_active BIT DEFAULT 1,
+    created_at DATETIME2 DEFAULT SYSUTCDATETIME(),
+    updated_at DATETIME2,
 
-    CONSTRAINT fk_users_role
-        FOREIGN KEY (role_id)
-        REFERENCES dbo.roles(id)
+    FOREIGN KEY (role_id) REFERENCES roles(id)
 );
 GO
 
--- Sample Users Data (passwords hashed with bcrypt, salt rounds 10)
--- Original password for all: '123456'
-INSERT INTO dbo.users (full_name, email, password_hash, student_code, role_id)
-VALUES 
-('System Admin', 'admin@university.edu', '$2b$10$sI/rsbkKcqWyNB8yYbLTZeuNnq..u4tOIA2yZpCkefXs8VF8ZuBwG', NULL, 1),
-('Event Organizer', 'organizer@university.edu', '$2b$10$sI/rsbkKcqWyNB8yYbLTZeuNnq..u4tOIA2yZpCkefXs8VF8ZuBwG', NULL, 2),
-('Nguyen Van A', 'student1@university.edu', '$2b$10$sI/rsbkKcqWyNB8yYbLTZeuNnq..u4tOIA2yZpCkefXs8VF8ZuBwG', 'SV001', 3),
-('Tran Thi B', 'student2@university.edu', '$2b$10$sI/rsbkKcqWyNB8yYbLTZeuNnq..u4tOIA2yZpCkefXs8VF8ZuBwG', 'SV002', 3),
-('Le Van C', 'student3@university.edu', '$2b$10$sI/rsbkKcqWyNB8yYbLTZeuNnq..u4tOIA2yZpCkefXs8VF8ZuBwG', 'SV003', 3);
+---------------------------------------------------------
+-- 5. EVENT CATEGORIES
+---------------------------------------------------------
+CREATE TABLE event_categories (
+    id INT IDENTITY PRIMARY KEY,
+    name NVARCHAR(100) UNIQUE NOT NULL,
+    description NVARCHAR(255)
+);
 GO
 
----------------------------------------------------------
--- 6. SAMPLE EVENT CATEGORIES
----------------------------------------------------------
-INSERT INTO dbo.event_categories (name, description)
-VALUES 
-('Academic', 'Academic events and lectures'),
-('Sports', 'Sports and recreational activities'),
-('Cultural', 'Cultural and artistic events'),
-('Technology', 'Technology and innovation events');
-GO
-
----------------------------------------------------------
--- 7. SAMPLE EVENTS
----------------------------------------------------------
-INSERT INTO dbo.events (title, description, location, start_time, end_time, max_participants, category_id, created_by)
-VALUES 
-('Introduction to Flutter Development', 'Learn the basics of Flutter mobile app development', 'Room 101', '2024-12-01 10:00:00', '2024-12-01 12:00:00', 50, 4, 2),
-('Campus Basketball Tournament', 'Annual inter-department basketball championship', 'Sports Center', '2024-12-05 14:00:00', '2024-12-05 18:00:00', 100, 2, 2),
-('Cultural Festival 2024', 'Celebrating diversity through music, dance and food', 'Main Auditorium', '2024-12-10 18:00:00', '2024-12-10 22:00:00', 200, 3, 2),
-('AI and Machine Learning Workshop', 'Hands-on workshop on AI/ML fundamentals', 'Computer Lab', '2024-12-15 09:00:00', '2024-12-15 17:00:00', 30, 4, 2);
+INSERT INTO event_categories (name, description)
+VALUES
+('Academic','Academic lectures'),
+('Sports','Sport activities'),
+('Cultural','Cultural events'),
+('Technology','Tech workshops');
 GO
 
 ---------------------------------------------------------
 -- 6. EVENTS
 ---------------------------------------------------------
-CREATE TABLE dbo.events (
-    id INT IDENTITY(1,1) PRIMARY KEY,
+CREATE TABLE events (
+    id INT IDENTITY PRIMARY KEY,
     title NVARCHAR(255) NOT NULL,
-    description NVARCHAR(MAX) NULL,
+    description NVARCHAR(MAX),
     location NVARCHAR(255) NOT NULL,
     start_time DATETIME2 NOT NULL,
     end_time DATETIME2 NOT NULL,
-    max_participants INT NOT NULL CHECK (max_participants > 0),
-    category_id INT NULL,
+    max_participants INT NOT NULL,
+    category_id INT,
     created_by INT NOT NULL,
-    google_sheet_id NVARCHAR(255) NULL,
-    google_sheet_name NVARCHAR(255) NULL,
-    is_active BIT NOT NULL DEFAULT 1,
-    created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
-    updated_at DATETIME2 NULL,
+    is_active BIT DEFAULT 1,
+    created_at DATETIME2 DEFAULT SYSUTCDATETIME(),
+    updated_at DATETIME2,
 
-    CONSTRAINT fk_events_category
-        FOREIGN KEY (category_id)
-        REFERENCES dbo.event_categories(id),
+    FOREIGN KEY (category_id) REFERENCES event_categories(id),
+    FOREIGN KEY (created_by) REFERENCES users(id),
 
-    CONSTRAINT fk_events_created_by
-        FOREIGN KEY (created_by)
-        REFERENCES dbo.users(id),
-
-    CONSTRAINT chk_events_end_after_start
-        CHECK (end_time > start_time)
+    CHECK (end_time > start_time),
+    CHECK (max_participants > 0)
 );
 GO
 
 ---------------------------------------------------------
--- 8. REGISTRATIONS
+-- 7. REGISTRATIONS
 ---------------------------------------------------------
-CREATE TABLE dbo.registrations (
-    id INT IDENTITY(1,1) PRIMARY KEY,
+CREATE TABLE registrations (
+    id INT IDENTITY PRIMARY KEY,
     user_id INT NOT NULL,
     event_id INT NOT NULL,
-    qr_token NVARCHAR(255) NOT NULL UNIQUE,
-    status NVARCHAR(20) NOT NULL DEFAULT 'registered'
-        CHECK (status IN ('registered','attended','cancelled')),
-    registered_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
-    updated_at DATETIME2 NULL,
+    qr_token NVARCHAR(255) UNIQUE NOT NULL,
+    status NVARCHAR(20) DEFAULT 'registered',
+    registered_at DATETIME2 DEFAULT SYSUTCDATETIME(),
 
-    CONSTRAINT fk_reg_user
-        FOREIGN KEY (user_id)
-        REFERENCES dbo.users(id)
-        ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
 
-    CONSTRAINT fk_reg_event
-        FOREIGN KEY (event_id)
-        REFERENCES dbo.events(id)
-        ON DELETE CASCADE,
-
-    CONSTRAINT uq_user_event UNIQUE (user_id, event_id)
+    CONSTRAINT uq_user_event UNIQUE(user_id,event_id)
 );
 GO
 
 ---------------------------------------------------------
--- 9. ATTENDANCES (CHECK-IN)
+-- 8. ATTENDANCES
 ---------------------------------------------------------
-CREATE TABLE dbo.attendances (
-    id INT IDENTITY(1,1) PRIMARY KEY,
-    registration_id INT NOT NULL UNIQUE,
-    checkin_time DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+CREATE TABLE attendances (
+    id INT IDENTITY PRIMARY KEY,
+    registration_id INT UNIQUE NOT NULL,
+    checkin_time DATETIME2 DEFAULT SYSUTCDATETIME(),
     checkin_by INT NOT NULL,
-    created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
-    updated_at DATETIME2 NULL,
 
-    CONSTRAINT fk_attendance_registration
-        FOREIGN KEY (registration_id)
-        REFERENCES dbo.registrations(id)
-        ON DELETE CASCADE,
-
-    CONSTRAINT fk_attendance_admin
-        FOREIGN KEY (checkin_by)
-        REFERENCES dbo.users(id)
+    FOREIGN KEY (registration_id) REFERENCES registrations(id) ON DELETE CASCADE,
+    FOREIGN KEY (checkin_by) REFERENCES users(id)
 );
 GO
 
 ---------------------------------------------------------
--- 10. REFRESH TOKENS (JWT)
+-- 9. REFRESH TOKENS
 ---------------------------------------------------------
-CREATE TABLE dbo.refresh_tokens (
-    id INT IDENTITY(1,1) PRIMARY KEY,
+CREATE TABLE refresh_tokens (
+    id INT IDENTITY PRIMARY KEY,
     user_id INT NOT NULL,
-    token NVARCHAR(500) NOT NULL UNIQUE,
+    token NVARCHAR(500) UNIQUE NOT NULL,
     expires_at DATETIME2 NOT NULL,
-    created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
-    updated_at DATETIME2 NULL,
-    is_revoked BIT NOT NULL DEFAULT 0,
+    is_revoked BIT DEFAULT 0,
+    created_at DATETIME2 DEFAULT SYSUTCDATETIME(),
 
-    CONSTRAINT fk_refresh_user
-        FOREIGN KEY (user_id)
-        REFERENCES dbo.users(id)
-        ON DELETE CASCADE,
-
-    CONSTRAINT chk_refresh_expires_future
-        CHECK (expires_at > SYSUTCDATETIME())
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 GO
 
 ---------------------------------------------------------
--- 11. AUDIT LOGS
+-- 10. AUDIT LOGS
 ---------------------------------------------------------
-CREATE TABLE dbo.audit_logs (
-    id INT IDENTITY(1,1) PRIMARY KEY,
-    user_id INT NULL,
+CREATE TABLE audit_logs (
+    id INT IDENTITY PRIMARY KEY,
+    user_id INT,
     action NVARCHAR(255) NOT NULL,
-    entity_name NVARCHAR(100) NOT NULL,
-    entity_id INT NULL,
-    created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    entity_name NVARCHAR(100),
+    entity_id INT,
+    created_at DATETIME2 DEFAULT SYSUTCDATETIME(),
 
-    CONSTRAINT fk_audit_user
-        FOREIGN KEY (user_id)
-        REFERENCES dbo.users(id)
+    FOREIGN KEY (user_id) REFERENCES users(id)
 );
 GO
 
 ---------------------------------------------------------
--- 12. INDEXES (OPTIMIZATION)
+-- 11. SAMPLE USERS
 ---------------------------------------------------------
-CREATE INDEX idx_users_email ON dbo.users(email);
-CREATE INDEX idx_users_student_code ON dbo.users(student_code);
-CREATE INDEX idx_events_start_time ON dbo.events(start_time);
-CREATE INDEX idx_events_category ON dbo.events(category_id);
-CREATE INDEX idx_reg_user ON dbo.registrations(user_id);
-CREATE INDEX idx_reg_event ON dbo.registrations(event_id);
-CREATE INDEX idx_reg_status ON dbo.registrations(status);
-CREATE INDEX idx_qr_token ON dbo.registrations(qr_token);
-CREATE INDEX idx_attendances_checkin_time ON dbo.attendances(checkin_time);
-CREATE INDEX idx_refresh_tokens_token ON dbo.refresh_tokens(token);
-CREATE INDEX idx_refresh_tokens_expires ON dbo.refresh_tokens(expires_at);
-CREATE INDEX idx_audit_logs_user ON dbo.audit_logs(user_id);
-CREATE INDEX idx_audit_logs_entity ON dbo.audit_logs(entity_name, entity_id);
+INSERT INTO users (full_name,email,password_hash,student_code,role_id)
+VALUES
+('System Admin','admin@university.edu','$2b$10$sI/rsbkKcqWyNB8yYbLTZeuNnq..u4tOIA2yZpCkefXs8VF8ZuBwG',NULL,1),
+('Event Organizer','organizer@university.edu','$2b$10$sI/rsbkKcqWyNB8yYbLTZeuNnq..u4tOIA2yZpCkefXs8VF8ZuBwG',NULL,2),
+('Nguyen Van A','student1@university.edu','$2b$10$sI/rsbkKcqWyNB8yYbLTZeuNnq..u4tOIA2yZpCkefXs8VF8ZuBwG','SV001',3),
+('Tran Thi B','student2@university.edu','$2b$10$sI/rsbkKcqWyNB8yYbLTZeuNnq..u4tOIA2yZpCkefXs8VF8ZuBwG','SV002',3),
+('Le Van C','student3@university.edu','$2b$10$sI/rsbkKcqWyNB8yYbLTZeuNnq..u4tOIA2yZpCkefXs8VF8ZuBwG','SV003',3);
 GO
 
-/* ================= END OF FILE ================= */
+---------------------------------------------------------
+-- 12. SAMPLE EVENTS
+---------------------------------------------------------
+INSERT INTO events
+(title,description,location,start_time,end_time,max_participants,category_id,created_by)
+VALUES
+('Flutter Workshop','Learn Flutter basics','Room 101','2025-12-01 10:00','2025-12-01 12:00',50,4,2),
+('Basketball Tournament','Annual basketball event','Sports Center','2025-12-05 14:00','2025-12-05 18:00',100,2,2),
+('Cultural Festival','Music and food festival','Auditorium','2025-12-10 18:00','2025-12-10 22:00',200,3,2),
+('AI Workshop','AI and Machine Learning','Computer Lab','2025-12-15 09:00','2025-12-15 17:00',30,4,2);
+GO
+
+---------------------------------------------------------
+-- 13. INDEXES
+---------------------------------------------------------
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_student_code ON users(student_code);
+
+CREATE INDEX idx_events_start_time ON events(start_time);
+CREATE INDEX idx_events_category ON events(category_id);
+
+CREATE INDEX idx_reg_user ON registrations(user_id);
+CREATE INDEX idx_reg_event ON registrations(event_id);
+CREATE INDEX idx_qr_token ON registrations(qr_token);
+
+CREATE INDEX idx_attendance_checkin ON attendances(checkin_time);
+GO
