@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "db:migrate": "node src/scripts/runMigrations.js",
+    "db:seed": "node src/scripts/runSeeders.js",
     "test": "jest"
   },
   "keywords": [

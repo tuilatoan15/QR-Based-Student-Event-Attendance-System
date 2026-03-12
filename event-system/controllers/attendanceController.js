@@ -65,13 +65,14 @@ const scanQr = async (req, res, next) => {
       // Insert attendance record
       const attendanceResult = await request
         .input('registration_id', sql.Int, registration.id)
+        .input('checkin_by', sql.Int, req.user.id)
         .query(
-          `INSERT INTO attendances (registration_id, check_in_time, status)
-           OUTPUT INSERTED.check_in_time AS check_in_time
-           VALUES (@registration_id, SYSUTCDATETIME(), 'checked_in')`
+          `INSERT INTO attendances (registration_id, checkin_time, checkin_by)
+           OUTPUT INSERTED.checkin_time AS checkin_time
+           VALUES (@registration_id, SYSUTCDATETIME(), @checkin_by)`
         );
 
-      const checkin_time = attendanceResult.recordset[0].check_in_time;
+      const checkin_time = attendanceResult.recordset[0].checkin_time;
 
       // Update registration status to attended
       await request

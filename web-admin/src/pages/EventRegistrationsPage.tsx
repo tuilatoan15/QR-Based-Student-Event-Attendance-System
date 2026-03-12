@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { eventApi } from '../api/eventApi';
 import { exportToCsv, exportToXlsx } from '../utils/exporters';
-import { notifySuccess } from '../utils/notify';
 
 type Registration = {
   id: number;
@@ -25,7 +24,6 @@ const EventRegistrationsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<
     'all' | 'pending' | 'approved' | 'cancelled'
   >('all');
-  const [busyId, setBusyId] = useState<number | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -110,25 +108,6 @@ const EventRegistrationsPage: React.FC = () => {
     exportToXlsx(`event-${id}-participants.xlsx`, 'Participants', header, rows);
   };
 
-  const updateStatus = async (registrationId: number, status: 'registered' | 'cancelled') => {
-    if (!id) return;
-    setBusyId(registrationId);
-    try {
-      const res = await eventApi.updateRegistrationStatus(
-        Number(id),
-        registrationId,
-        status,
-      );
-      notifySuccess(res.data?.message || 'Updated');
-      // Refresh list
-      const regsRes = await eventApi.getEventRegistrations(Number(id));
-      const data = regsRes.data.data ?? regsRes.data;
-      setRegistrations(Array.isArray(data) ? data : []);
-    } finally {
-      setBusyId(null);
-    }
-  };
-
   if (loading) return <div>Loading participants...</div>;
   if (error) return <div className="text-red-600">{error}</div>;
 
@@ -196,9 +175,6 @@ const EventRegistrationsPage: React.FC = () => {
               <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Check-in Time
               </th>
-              <th className="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Actions
-              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -226,65 +202,12 @@ const EventRegistrationsPage: React.FC = () => {
                     ? new Date(reg.checkin_time).toLocaleString()
                     : '-'}
                 </td>
-                <td className="px-4 py-2 text-right text-sm">
-                  {(() => {
-                    const regId = reg.registration_id ?? reg.id;
-                    const s = (reg.registration_status ?? '').toLowerCase();
-                    const busy = busyId === regId;
-                    if (!regId) return null;
-                    if (s === 'cancelled') {
-                      return (
-                        <span className="text-xs text-slate-500">—</span>
-                      );
-                    }
-                    if (s === 'attended') {
-                      return (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void updateStatus(regId, 'cancelled')}
-                          className="rounded-md bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
-                        >
-                          Cancel
-                        </button>
-                      );
-                    }
-                    return (
-                      <div className="inline-flex gap-2">
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void updateStatus(regId, 'registered')}
-                          className="rounded-md bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void updateStatus(regId, 'cancelled')}
-                          className="rounded-md bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
-                        >
-                          Reject
-                        </button>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void updateStatus(regId, 'cancelled')}
-                          className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-200 disabled:opacity-50"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    );
-                  })()}
-                </td>
               </tr>
             ))}
             {filtered.length === 0 && (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={6}
                   className="px-4 py-4 text-center text-sm text-slate-500"
                 >
                   No registrations yet.
