@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { eventApi, type Event } from '../api/eventApi';
 import EventTable from '../components/EventTable';
+import { useAuth } from '../context/AuthContext';
 
 const EventsPage: React.FC = () => {
+  const { user } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -12,7 +14,10 @@ const EventsPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await eventApi.getEvents();
+      const res =
+        user?.role === 'organizer'
+          ? await eventApi.getOrganizerEvents()
+          : await eventApi.getEvents();
       const data = res.data.data ?? res.data;
       setEvents(Array.isArray(data) ? data : []);
     } catch (err: any) {

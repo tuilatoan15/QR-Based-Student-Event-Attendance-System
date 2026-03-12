@@ -132,7 +132,7 @@ const getAttendancesForEvent = async (event_id) => {
     .request()
     .input('event_id', sql.Int, event_id)
     .query(
-      `SELECT a.id, a.registration_id, a.check_in_time, a.status AS attendance_status,
+      `SELECT a.id, a.registration_id, a.checkin_time, a.checkin_by,
               r.user_id, r.event_id, r.qr_token, r.status AS registration_status,
               u.full_name AS student_name, u.email, u.student_code,
               e.title AS event_title
@@ -141,7 +141,7 @@ const getAttendancesForEvent = async (event_id) => {
        JOIN users u ON r.user_id = u.id
        JOIN events e ON r.event_id = e.id
        WHERE r.event_id = @event_id
-       ORDER BY a.check_in_time ASC`
+       ORDER BY a.checkin_time ASC`
     );
   return result.recordset;
 };
@@ -151,12 +151,13 @@ const insertAttendance = async (registration_id, checkin_by) => {
   const result = await pool
     .request()
     .input('registration_id', sql.Int, registration_id)
+    .input('checkin_by', sql.Int, checkin_by)
     .query(
-      `INSERT INTO attendances (registration_id, check_in_time, status)
-       OUTPUT INSERTED.check_in_time AS check_in_time
-       VALUES (@registration_id, SYSUTCDATETIME(), 'checked_in')`
+      `INSERT INTO attendances (registration_id, checkin_time, checkin_by)
+       OUTPUT INSERTED.checkin_time AS checkin_time
+       VALUES (@registration_id, SYSUTCDATETIME(), @checkin_by)`
     );
-  return result.recordset[0].check_in_time;
+  return result.recordset[0].checkin_time;
 };
 
 const hasAttendanceForRegistration = async (registration_id) => {

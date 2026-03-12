@@ -65,37 +65,8 @@ const deactivateUserHandler = async (req, res, next) => {
   }
 };
 
-const updateRegistrationStatusHandler = async (req, res, next) => {
-  try {
-    const eventId = parseInt(req.params.eventId, 10);
-    const registrationId = parseInt(req.params.registrationId, 10);
-    const { status } = req.body || {};
-    if (!eventId || !Number.isInteger(eventId)) return errorResponse(res, 400, 'Invalid event id');
-    if (!registrationId || !Number.isInteger(registrationId)) return errorResponse(res, 400, 'Invalid registration id');
-    if (!status || typeof status !== 'string') return errorResponse(res, 400, 'status is required');
-
-    const normalized = status.toLowerCase();
-    const allowed = new Set([
-      REGISTRATION_STATUS.REGISTERED,
-      REGISTRATION_STATUS.CANCELLED,
-      REGISTRATION_STATUS.ATTENDED
-    ]);
-    if (!allowed.has(normalized)) return errorResponse(res, 400, 'Invalid status');
-
-    const reg = await getRegistrationById(registrationId);
-    if (!reg) return errorResponse(res, 404, 'Registration not found');
-    if (parseInt(reg.event_id, 10) !== eventId) return errorResponse(res, 400, 'Registration does not belong to this event');
-
-    await updateRegistrationStatus(registrationId, normalized);
-    return successResponse(res, 200, 'Registration status updated successfully', {
-      id: registrationId,
-      event_id: eventId,
-      status: normalized
-    });
-  } catch (err) {
-    next(err);
-  }
-};
+// NOTE: Registration status is controlled by student actions + QR attendance only.
+// No manual registration status mutation endpoint is exposed via admin API.
 
 const listAttendanceHandler = async (req, res, next) => {
   try {
@@ -119,8 +90,8 @@ const listAttendanceHandler = async (req, res, next) => {
       `SELECT 
          a.id AS attendance_id,
          a.registration_id,
-         a.check_in_time AS check_in_time,
-         a.status AS attendance_status,
+         a.checkin_time AS checkin_time,
+         a.checkin_by AS checkin_by,
          r.event_id,
          r.status AS registration_status,
          u.id AS user_id,
@@ -133,53 +104,10 @@ const listAttendanceHandler = async (req, res, next) => {
        JOIN users u ON r.user_id = u.id
        JOIN events e ON r.event_id = e.id
        ${whereSql}
-       ORDER BY a.check_in_time DESC`
+       ORDER BY a.checkin_time DESC`
     );
 
     return successResponse(res, 200, 'Attendance retrieved successfully', result.recordset);
-  } catch (err) {
-    next(err);
-  }
-};
-
-// Manual check-in by registration_id (admin/organizer)
-const manualCheckinHandler = async (req, res, next) => {
-  try {
-    const { registration_id } = req.body || {};
-    const regId = parseInt(registration_id, 10);
-    if (!regId || !Number.isInteger(regId)) return errorResponse(res, 400, 'registration_id is required');
-
-    // Reuse the existing scan-qr flow by looking up the QR token.
-    // This keeps check-in logic consistent (attendance insert + status update + sheets update).
-    const reg = await getRegistrationById(regId);
-    if (!reg) return errorResponse(res, 404, 'Registration not found');
-
-    // Delegate to attendanceController via HTTP-like call is messy; do minimal inline:
-    // Insert attendance if not already checked in.
-    const pool = await poolPromise;
-    const exists = await pool
-      .request()
-      .input('registration_id', sql.Int, regId)
-      .query('SELECT TOP 1 id FROM attendances WHERE registration_id = @registration_id');
-    if (exists.recordset.length > 0) return errorResponse(res, 409, 'Already checked in');
-
-    const attendanceResult = await pool
-      .request()
-      .input('registration_id', sql.Int, regId)
-      .query(
-        `INSERT INTO attendances (registration_id, check_in_time, status)
-         OUTPUT INSERTED.check_in_time AS check_in_time
-         VALUES (@registration_id, SYSUTCDATETIME(), 'checked_in')`
-      );
-
-    await updateRegistrationStatus(regId, REGISTRATION_STATUS.ATTENDED);
-
-    return successResponse(res, 200, 'Manual check-in successful', {
-      registration_id: regId,
-      event_id: reg.event_id,
-      student_name: reg.full_name,
-      check_in_time: attendanceResult.recordset[0].check_in_time
-    });
   } catch (err) {
     next(err);
   }
@@ -189,8 +117,6 @@ module.exports = {
   listUsersHandler,
   updateUserRoleHandler,
   deactivateUserHandler,
-  updateRegistrationStatusHandler,
-  listAttendanceHandler,
-  manualCheckinHandler
+  listAttendanceHandler
 };
 

@@ -16,6 +16,10 @@ export const eventApi = {
     return axiosClient.get('/events');
   },
 
+  getOrganizerEvents(params?: { page?: number; limit?: number }) {
+    return axiosClient.get('/events/organizer/events', { params });
+  },
+
   async getAllEvents() {
     const all: any[] = [];
     let page = 1;
@@ -51,13 +55,6 @@ export const eventApi = {
 
   getEventRegistrations(id: number) {
     return axiosClient.get(`/events/${id}/registrations`);
-  },
-
-  updateRegistrationStatus(eventId: number, registrationId: number, status: string) {
-    return axiosClient.patch(
-      `/events/${eventId}/registrations/${registrationId}/status`,
-      { status },
-    );
   },
 };
 

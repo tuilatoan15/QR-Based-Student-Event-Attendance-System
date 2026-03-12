@@ -31,7 +31,10 @@ app.use(
   }),
 );
 app.use(morgan('combined'));
-app.use('/api', apiLimiter);
+// Avoid rate-limit friction during local development demos.
+if (process.env.NODE_ENV !== 'development') {
+  app.use('/api', apiLimiter);
+}
 
 app.get('/', (req, res) => {
   res.status(200).json({

@@ -131,7 +131,7 @@ const getEventParticipants = async (event_id) => {
         u.student_code,
         u.email,
         r.status AS registration_status,
-        a.check_in_time
+        a.checkin_time
        FROM registrations r
        JOIN users u ON r.user_id = u.id
        LEFT JOIN attendances a ON a.registration_id = r.id
