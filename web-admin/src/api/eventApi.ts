@@ -16,6 +16,23 @@ export const eventApi = {
     return axiosClient.get('/events');
   },
 
+  async getAllEvents() {
+    const all: any[] = [];
+    let page = 1;
+    const limit = 100;
+    // Backend uses pagination; loop until empty page
+    while (true) {
+      const res = await axiosClient.get('/events', { params: { page, limit } });
+      const payload = res.data?.data ?? res.data;
+      const items = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : [];
+      if (!items.length) break;
+      all.push(...items);
+      if (items.length < limit) break;
+      page += 1;
+    }
+    return all as Event[];
+  },
+
   getEvent(id: number) {
     return axiosClient.get(`/events/${id}`);
   },
@@ -34,6 +51,13 @@ export const eventApi = {
 
   getEventRegistrations(id: number) {
     return axiosClient.get(`/events/${id}/registrations`);
+  },
+
+  updateRegistrationStatus(eventId: number, registrationId: number, status: string) {
+    return axiosClient.patch(
+      `/events/${eventId}/registrations/${registrationId}/status`,
+      { status },
+    );
   },
 };
 

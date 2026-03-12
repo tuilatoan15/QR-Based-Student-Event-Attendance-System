@@ -47,6 +47,20 @@ const findRegistrationByQrToken = async (qr_token) => {
   return result.recordset[0] || null;
 };
 
+const getRegistrationById = async (id) => {
+  const pool = await poolPromise;
+  const result = await pool
+    .request()
+    .input('id', sql.Int, id)
+    .query(
+      `SELECT r.*, u.full_name, u.email, u.student_code
+       FROM registrations r
+       JOIN users u ON r.user_id = u.id
+       WHERE r.id = @id`
+    );
+  return result.recordset[0] || null;
+};
+
 const updateRegistrationStatus = async (id, status) => {
   const pool = await poolPromise;
   await pool
@@ -118,14 +132,16 @@ const getAttendancesForEvent = async (event_id) => {
     .request()
     .input('event_id', sql.Int, event_id)
     .query(
-      `SELECT a.id, a.registration_id, a.checkin_time, a.checkin_by,
-              r.user_id, r.qr_token, r.status,
-              u.full_name, u.email
+      `SELECT a.id, a.registration_id, a.check_in_time, a.status AS attendance_status,
+              r.user_id, r.event_id, r.qr_token, r.status AS registration_status,
+              u.full_name AS student_name, u.email, u.student_code,
+              e.title AS event_title
        FROM attendances a
        JOIN registrations r ON a.registration_id = r.id
        JOIN users u ON r.user_id = u.id
+       JOIN events e ON r.event_id = e.id
        WHERE r.event_id = @event_id
-       ORDER BY a.checkin_time ASC`
+       ORDER BY a.check_in_time ASC`
     );
   return result.recordset;
 };
@@ -135,13 +151,12 @@ const insertAttendance = async (registration_id, checkin_by) => {
   const result = await pool
     .request()
     .input('registration_id', sql.Int, registration_id)
-    .input('checkin_by', sql.Int, checkin_by)
     .query(
-      `INSERT INTO attendances (registration_id, checkin_time, checkin_by)
-       OUTPUT INSERTED.checkin_time AS checkin_time
-       VALUES (@registration_id, SYSUTCDATETIME(), @checkin_by)`
+      `INSERT INTO attendances (registration_id, check_in_time, status)
+       OUTPUT INSERTED.check_in_time AS check_in_time
+       VALUES (@registration_id, SYSUTCDATETIME(), 'checked_in')`
     );
-  return result.recordset[0].checkin_time;
+  return result.recordset[0].check_in_time;
 };
 
 const hasAttendanceForRegistration = async (registration_id) => {
@@ -158,6 +173,7 @@ module.exports = {
   createRegistration,
   findRegistrationByUserAndEvent,
   findRegistrationByQrToken,
+  getRegistrationById,
   updateRegistrationStatus,
   getRegistrationsByUserWithEvents,
   getRegistrationsForEvent,

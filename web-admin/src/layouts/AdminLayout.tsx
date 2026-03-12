@@ -55,12 +55,20 @@ const AdminLayout: React.FC = () => {
             QR Scanner
           </NavLink>
           <NavLink
-            to="/events"
+            to="/attendance"
             className={({ isActive }) =>
               `${navLinkClass} ${isActive ? 'bg-slate-800' : ''}`
             }
           >
-            Attendance history
+            Attendance
+          </NavLink>
+          <NavLink
+            to="/users"
+            className={({ isActive }) =>
+              `${navLinkClass} ${isActive ? 'bg-slate-800' : ''}`
+            }
+          >
+            Users
           </NavLink>
         </nav>
         <button

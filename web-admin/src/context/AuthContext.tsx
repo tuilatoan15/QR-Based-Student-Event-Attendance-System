@@ -6,6 +6,7 @@ import React, {
   useState,
 } from 'react';
 import axiosClient from '../api/axiosClient';
+import { onAuthLogout } from '../utils/authEvents';
 
 type User = {
   id: number;
@@ -68,6 +69,12 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({
     localStorage.removeItem(STORAGE_KEY_TOKEN);
     localStorage.removeItem(STORAGE_KEY_USER);
   }, []);
+
+  useEffect(() => {
+    return onAuthLogout(() => {
+      logout();
+    });
+  }, [logout]);
 
   return (
     <AuthContext.Provider value={{ user, token, loading, login, logout }}>

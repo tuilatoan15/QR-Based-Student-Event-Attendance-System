@@ -4,7 +4,8 @@ const {
   hasAttendanceForRegistration,
   REGISTRATION_STATUS
 } = require('../models/registrationModel');
-const { getEventById, getAttendancesForEvent } = require('../models/eventModel');
+const { getEventById } = require('../models/eventModel');
+const { getAttendancesForEvent } = require('../models/registrationModel');
 const { successResponse, errorResponse } = require('../utils/response');
 const { logCheckin } = require('../utils/logger');
 const googleSheetService = require('../services/googleSheetService');
@@ -64,14 +65,13 @@ const scanQr = async (req, res, next) => {
       // Insert attendance record
       const attendanceResult = await request
         .input('registration_id', sql.Int, registration.id)
-        .input('checkin_by', sql.Int, req.user.id)
         .query(
-          `INSERT INTO attendances (registration_id, checkin_time, checkin_by)
-           OUTPUT INSERTED.checkin_time AS checkin_time
-           VALUES (@registration_id, SYSUTCDATETIME(), @checkin_by)`
+          `INSERT INTO attendances (registration_id, check_in_time, status)
+           OUTPUT INSERTED.check_in_time AS check_in_time
+           VALUES (@registration_id, SYSUTCDATETIME(), 'checked_in')`
         );
 
-      const checkin_time = attendanceResult.recordset[0].checkin_time;
+      const checkin_time = attendanceResult.recordset[0].check_in_time;
 
       // Update registration status to attended
       await request
@@ -98,7 +98,6 @@ const scanQr = async (req, res, next) => {
         student_name: registration.full_name,
         event_id: registration.event_id,
         event_title: registration.event_title,
-        checked_in_by: req.user.id,
         check_in_time: checkin_time
       });
     } catch (transactionError) {
@@ -124,7 +123,59 @@ const getEventAttendance = async (req, res, next) => {
   }
 };
 
+const getEventAttendanceStats = async (req, res, next) => {
+  try {
+    const eventId = parseInt(req.params.id, 10);
+    if (!eventId || !Number.isInteger(eventId)) {
+      return errorResponse(res, 400, 'Invalid event id');
+    }
+
+    const event = await getEventById(eventId);
+    if (!event) {
+      return errorResponse(res, 404, 'Event not found');
+    }
+
+    const pool = await poolPromise;
+
+    const registeredRes = await pool
+      .request()
+      .input('event_id', sql.Int, eventId)
+      .query(
+        `SELECT COUNT(1) AS total_registered
+         FROM registrations
+         WHERE event_id = @event_id AND status <> 'cancelled'`
+      );
+
+    const attendedRes = await pool
+      .request()
+      .input('event_id', sql.Int, eventId)
+      .query(
+        `SELECT COUNT(1) AS total_attended
+         FROM attendances a
+         JOIN registrations r ON a.registration_id = r.id
+         WHERE r.event_id = @event_id`
+      );
+
+    const total_registered = registeredRes.recordset[0]?.total_registered ?? 0;
+    const total_attended = attendedRes.recordset[0]?.total_attended ?? 0;
+    const attendance_rate =
+      total_registered > 0
+        ? Math.round((total_attended / total_registered) * 100)
+        : 0;
+
+    return successResponse(res, 200, 'Attendance stats retrieved successfully', {
+      eventId,
+      total_registered,
+      total_attended,
+      attendance_rate
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   scanQr,
-  getEventAttendance
+  getEventAttendance,
+  getEventAttendanceStats
 };

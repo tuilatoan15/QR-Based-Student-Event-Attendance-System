@@ -1,11 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { eventApi } from '../api/eventApi';
+import { exportToCsv, exportToXlsx } from '../utils/exporters';
+import { notifySuccess } from '../utils/notify';
 
 type Registration = {
   id: number;
+  registration_id?: number;
+  user_id?: number;
   student_name?: string;
   email?: string;
+  student_code?: string;
   registration_status?: string;
   registered_at?: string;
   checkin_time?: string | null;
@@ -17,7 +22,10 @@ const EventRegistrationsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'registered' | 'attended' | 'cancelled'>('all');
+  const [statusFilter, setStatusFilter] = useState<
+    'all' | 'pending' | 'approved' | 'cancelled'
+  >('all');
+  const [busyId, setBusyId] = useState<number | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -40,13 +48,17 @@ const EventRegistrationsPage: React.FC = () => {
     void load();
   }, [id]);
 
+  const statusForFilter = (raw?: string) => {
+    const s = (raw ?? '').toLowerCase();
+    if (s === 'cancelled') return 'cancelled';
+    if (s === 'attended') return 'approved';
+    return 'pending';
+  };
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return registrations.filter((reg) => {
-      if (
-        statusFilter !== 'all' &&
-        (reg.registration_status ?? '').toLowerCase() !== statusFilter
-      ) {
+      if (statusFilter !== 'all' && statusForFilter(reg.registration_status) !== statusFilter) {
         return false;
       }
       if (!term) return true;
@@ -58,31 +70,63 @@ const EventRegistrationsPage: React.FC = () => {
 
   const handleExportCsv = () => {
     if (registrations.length === 0) return;
-    const header = ['Student Name', 'Email', 'Status', 'Registered At', 'Check-in Time'];
+    const header = [
+      'Student Name',
+      'Email',
+      'Student Code',
+      'Status',
+      'Registered At',
+      'Check-in Time',
+    ];
     const rows = registrations.map((reg) => [
       reg.student_name ?? '',
       reg.email ?? '',
+      reg.student_code ?? '',
       reg.registration_status ?? '',
       reg.registered_at ?? '',
       reg.checkin_time ?? '',
     ]);
-    const csvContent =
-      [header, ...rows]
-        .map((cols) =>
-          cols
-            .map((c) => `"${String(c).replace(/"/g, '""')}"`)
-            .join(','),
-        )
-        .join('\r\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `event-${id}-participants.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    exportToCsv(`event-${id}-participants.csv`, header, rows);
+  };
+
+  const handleExportXlsx = () => {
+    if (registrations.length === 0) return;
+    const header = [
+      'Student Name',
+      'Email',
+      'Student Code',
+      'Status',
+      'Registered At',
+      'Check-in Time',
+    ];
+    const rows = registrations.map((reg) => [
+      reg.student_name ?? '',
+      reg.email ?? '',
+      reg.student_code ?? '',
+      reg.registration_status ?? '',
+      reg.registered_at ?? '',
+      reg.checkin_time ?? '',
+    ]);
+    exportToXlsx(`event-${id}-participants.xlsx`, 'Participants', header, rows);
+  };
+
+  const updateStatus = async (registrationId: number, status: 'registered' | 'cancelled') => {
+    if (!id) return;
+    setBusyId(registrationId);
+    try {
+      const res = await eventApi.updateRegistrationStatus(
+        Number(id),
+        registrationId,
+        status,
+      );
+      notifySuccess(res.data?.message || 'Updated');
+      // Refresh list
+      const regsRes = await eventApi.getEventRegistrations(Number(id));
+      const data = regsRes.data.data ?? regsRes.data;
+      setRegistrations(Array.isArray(data) ? data : []);
+    } finally {
+      setBusyId(null);
+    }
   };
 
   if (loading) return <div>Loading participants...</div>;
@@ -110,8 +154,8 @@ const EventRegistrationsPage: React.FC = () => {
             }
           >
             <option value="all">All</option>
-            <option value="registered">Registered</option>
-            <option value="attended">Attended</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
             <option value="cancelled">Cancelled</option>
           </select>
           <button
@@ -120,6 +164,13 @@ const EventRegistrationsPage: React.FC = () => {
             className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
           >
             Export CSV
+          </button>
+          <button
+            type="button"
+            onClick={handleExportXlsx}
+            className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
+          >
+            Export Excel
           </button>
         </div>
       </div>
@@ -134,6 +185,9 @@ const EventRegistrationsPage: React.FC = () => {
                 Email
               </th>
               <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Student Code
+              </th>
+              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Registered At
               </th>
               <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -142,16 +196,22 @@ const EventRegistrationsPage: React.FC = () => {
               <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Check-in Time
               </th>
+              <th className="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filtered.map((reg) => (
-              <tr key={reg.id}>
+              <tr key={reg.registration_id ?? reg.id}>
                 <td className="px-4 py-2 text-sm text-slate-800">
                   {reg.student_name ?? '-'}
                 </td>
                 <td className="px-4 py-2 text-sm text-slate-600">
                   {reg.email ?? '-'}
+                </td>
+                <td className="px-4 py-2 text-sm text-slate-600">
+                  {reg.student_code ?? '-'}
                 </td>
                 <td className="px-4 py-2 text-sm text-slate-600">
                   {reg.registered_at
@@ -166,12 +226,65 @@ const EventRegistrationsPage: React.FC = () => {
                     ? new Date(reg.checkin_time).toLocaleString()
                     : '-'}
                 </td>
+                <td className="px-4 py-2 text-right text-sm">
+                  {(() => {
+                    const regId = reg.registration_id ?? reg.id;
+                    const s = (reg.registration_status ?? '').toLowerCase();
+                    const busy = busyId === regId;
+                    if (!regId) return null;
+                    if (s === 'cancelled') {
+                      return (
+                        <span className="text-xs text-slate-500">—</span>
+                      );
+                    }
+                    if (s === 'attended') {
+                      return (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void updateStatus(regId, 'cancelled')}
+                          className="rounded-md bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                      );
+                    }
+                    return (
+                      <div className="inline-flex gap-2">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void updateStatus(regId, 'registered')}
+                          className="rounded-md bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void updateStatus(regId, 'cancelled')}
+                          className="rounded-md bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                        >
+                          Reject
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void updateStatus(regId, 'cancelled')}
+                          className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-200 disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    );
+                  })()}
+                </td>
               </tr>
             ))}
             {filtered.length === 0 && (
               <tr>
                 <td
-                  colSpan={4}
+                  colSpan={7}
                   className="px-4 py-4 text-center text-sm text-slate-500"
                 >
                   No registrations yet.
