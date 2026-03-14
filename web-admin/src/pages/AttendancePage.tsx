@@ -15,7 +15,11 @@ const AttendancePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [eventId, setEventId] = useState<number | 'all'>('all');
   const [search, setSearch] = useState('');
-  const [manualRegId, setManualRegId] = useState('');
+  // Manual check-in by student code
+  const [manualStudentCode, setManualStudentCode] = useState('');
+  const [manualEventId, setManualEventId] = useState<number | ''>('');
+  const [manualResult, setManualResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [manualLoading, setManualLoading] = useState(false);
   const [scanResults, setScanResults] = useState<ScanResult[]>([]);
   const [scanning, setScanning] = useState(false);
   const [processingScan, setProcessingScan] = useState(false);
@@ -68,12 +72,26 @@ const AttendancePage: React.FC = () => {
   }, [records, search]);
 
   const onManualCheckin = async () => {
-    const id = parseInt(manualRegId, 10);
-    if (!Number.isInteger(id) || id <= 0) return;
-    const res = await attendanceApi.manualCheckIn(id);
-    notifySuccess(res.data?.message || 'Check-in thủ công thành công');
-    setManualRegId('');
-    await reload(eventId, search);
+    const code = manualStudentCode.trim();
+    const eid = manualEventId;
+    if (!code) { setManualResult({ ok: false, msg: 'Vui lòng nhập mã số sinh viên' }); return; }
+    if (!eid) { setManualResult({ ok: false, msg: 'Vui lòng chọn sự kiện' }); return; }
+    setManualLoading(true);
+    setManualResult(null);
+    try {
+      const res = await attendanceApi.manualCheckinByStudent(code, Number(eid));
+      const msg = res.data?.message || 'Điểm danh thủ công thành công!';
+      const alreadyDone = res.data?.data?.already_checked_in === true;
+      setManualResult({ ok: true, msg: alreadyDone ? '⚠️ ' + msg : '✓ ' + msg });
+      if (!alreadyDone) {
+        setManualStudentCode('');
+        notifySuccess(msg);
+        await reload(eventId, search);
+      }
+    } catch (err: any) {
+      const m = err?.response?.data?.message || 'Check-in thất bại';
+      setManualResult({ ok: false, msg: '✗ ' + m });
+    } finally { setManualLoading(false); }
   };
 
   const onExportCsv = () => {
@@ -269,10 +287,49 @@ const AttendancePage: React.FC = () => {
             <div className="att-card">
               <div className="att-card-head"><span className="att-card-title">Check-in thủ công</span></div>
               <div className="att-card-body">
-                <p style={{fontSize:12.5,color:'#94a3b8',marginBottom:12}}>Nhập <strong style={{color:'#334155'}}>Registration ID</strong> để đánh dấu điểm danh</p>
-                <div className="att-manual-input">
-                  <input type="text" placeholder="Registration ID" className="att-manual-text" value={manualRegId} onChange={e=>setManualRegId(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void onManualCheckin();}}/>
-                  <button type="button" onClick={()=>void onManualCheckin()} className="att-checkin-btn">Check-in</button>
+                <p style={{fontSize:12.5,color:'#94a3b8',marginBottom:12}}>
+                  Nhập <strong style={{color:'#334155'}}>Mã số sinh viên (MSSV)</strong> và chọn sự kiện để điểm danh
+                </p>
+                <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                  <input
+                    type="text"
+                    placeholder="Mã số sinh viên (vd: SV00001)"
+                    className="att-manual-text"
+                    value={manualStudentCode}
+                    onChange={e => setManualStudentCode(e.target.value.toUpperCase())}
+                    onKeyDown={e => { if (e.key === 'Enter') void onManualCheckin(); }}
+                  />
+                  <select
+                    className="att-select"
+                    style={{width:'100%'}}
+                    value={manualEventId}
+                    onChange={e => setManualEventId(e.target.value === '' ? '' : Number(e.target.value))}
+                  >
+                    <option value="">-- Chọn sự kiện --</option>
+                    {events.map(ev => <option key={ev.id} value={ev.id}>{ev.title}</option>)}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => void onManualCheckin()}
+                    className="att-checkin-btn"
+                    disabled={manualLoading}
+                    style={{opacity: manualLoading ? 0.7 : 1}}
+                  >
+                    {manualLoading ? 'Đang xử lý...' : '✓ Check-in'}
+                  </button>
+                  {manualResult && (
+                    <div style={{
+                      padding:'10px 12px',
+                      borderRadius:8,
+                      fontSize:13,
+                      fontWeight:600,
+                      background: manualResult.ok ? '#f0fdf4' : '#fff1f2',
+                      color: manualResult.ok ? '#15803d' : '#be123c',
+                      border: `1px solid ${manualResult.ok ? '#bbf7d0' : '#fecaca'}`
+                    }}>
+                      {manualResult.msg}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

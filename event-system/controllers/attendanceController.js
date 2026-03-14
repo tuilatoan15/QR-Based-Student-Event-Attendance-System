@@ -219,8 +219,104 @@ const getEventAttendanceStats = async (req, res, next) => {
   }
 };
 
+// Manual check-in by student_code + event_id
+const manualCheckinByStudent = async (req, res, next) => {
+  const pool = await poolPromise;
+  const transaction = new sql.Transaction(pool);
+  try {
+    const { student_code, event_id } = req.body;
+
+    if (!student_code || !event_id) {
+      return errorResponse(res, 400, 'student_code v\u00e0 event_id l\u00e0 b\u1eaft bu\u1ed9c');
+    }
+
+    // Verify organizer permission
+    const event = await getEventById(event_id);
+    if (!event) return errorResponse(res, 404, 'Kh\u00f4ng t\u00ecm th\u1ea5y s\u1ef1 ki\u1ec7n');
+    if (req.user.role !== 'admin' && event.created_by !== req.user.id) {
+      return errorResponse(res, 403, 'B\u1ea1n kh\u00f4ng c\u00f3 quy\u1ec1n \u0111i\u1ec3m danh cho s\u1ef1 ki\u1ec7n n\u00e0y');
+    }
+
+    // Find registration by student_code + event_id
+    const regRes = await pool.request()
+      .input('student_code', sql.NVarChar(50), student_code.trim().toUpperCase())
+      .input('event_id', sql.Int, parseInt(event_id, 10))
+      .query(`
+        SELECT r.id AS registration_id, r.status, u.full_name, u.student_code, r.user_id, e.title AS event_title
+        FROM registrations r
+        JOIN users u ON r.user_id = u.id
+        JOIN events e ON r.event_id = e.id
+        WHERE UPPER(u.student_code) = @student_code
+          AND r.event_id = @event_id
+      `);
+
+    const reg = regRes.recordset[0];
+    if (!reg) {
+      return errorResponse(res, 404, `Kh\u00f4ng t\u00ecm th\u1ea5y \u0111\u0103ng k\u00fd cho MSSV: ${student_code} t\u1ea1i s\u1ef1 ki\u1ec7n n\u00e0y`);
+    }
+
+    if (reg.status === 'attended') {
+      return successResponse(res, 200, 'Sinh vi\u00ean n\u00e0y \u0111\u00e3 \u0111i\u1ec3m danh tr\u01b0\u1edbc \u0111\u00f3', {
+        already_checked_in: true,
+        student_name: reg.full_name,
+        student_code: reg.student_code,
+        event_title: reg.event_title
+      });
+    }
+
+    await transaction.begin();
+    try {
+      const request = new sql.Request(transaction);
+
+      const attResult = await request
+        .input('registration_id', sql.Int, reg.registration_id)
+        .input('checkin_by', sql.Int, req.user.id)
+        .query(`
+          INSERT INTO attendances (registration_id, checkin_time, checkin_by)
+          OUTPUT INSERTED.checkin_time AS checkin_time
+          VALUES (@registration_id, SYSUTCDATETIME(), @checkin_by)
+        `);
+
+      const checkin_time = attResult.recordset[0].checkin_time;
+
+      await request
+        .input('reg_id', sql.Int, reg.registration_id)
+        .input('status', sql.NVarChar(20), 'attended')
+        .query('UPDATE registrations SET status = @status WHERE id = @reg_id');
+
+      // Notification
+      await request
+        .input('student_id', sql.Int, reg.user_id)
+        .input('notif_title', sql.NVarChar(255), '\u0110i\u1ec3m danh th\u00e0nh c\u00f4ng')
+        .input('notif_msg', sql.NVarChar(sql.MAX), 'B\u1ea1n \u0111\u00e3 \u0111i\u1ec3m danh th\u00e0nh c\u00f4ng s\u1ef1 ki\u1ec7n: ' + reg.event_title)
+        .query('INSERT INTO notifications (user_id, title, message) VALUES (@student_id, @notif_title, @notif_msg)');
+
+      await transaction.commit();
+
+      return successResponse(res, 200, '\u0110i\u1ec3m danh th\u1ee7 c\u00f4ng th\u00e0nh c\u00f4ng!', {
+        student_name: reg.full_name,
+        student_code: reg.student_code,
+        event_title: reg.event_title,
+        check_in_time: checkin_time
+      });
+    } catch (txErr) {
+      await transaction.rollback();
+      if (txErr.number === 2627) {
+        return successResponse(res, 200, 'Sinh vi\u00ean n\u00e0y \u0111\u00e3 \u0111i\u1ec3m danh tr\u01b0\u1edbc \u0111\u00f3', {
+          already_checked_in: true,
+          student_name: reg.full_name
+        });
+      }
+      throw txErr;
+    }
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   scanQr,
   getEventAttendance,
-  getEventAttendanceStats
+  getEventAttendanceStats,
+  manualCheckinByStudent
 };

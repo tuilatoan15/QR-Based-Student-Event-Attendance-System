@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../models/event.dart';
 
 class EventCard extends StatelessWidget {
@@ -7,6 +6,7 @@ class EventCard extends StatelessWidget {
     super.key,
     required this.event,
     this.onTap,
+    this.isRegistered = false,
     this.isOrganizer = false,
     this.onEdit,
     this.onDelete,
@@ -16,84 +16,138 @@ class EventCard extends StatelessWidget {
 
   final Event event;
   final VoidCallback? onTap;
+  final bool isRegistered;
   final bool isOrganizer;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final VoidCallback? onViewRegistrations;
   final VoidCallback? onScanQr;
 
-  String _formatTime(DateTime dateTime) {
-    final date = dateTime.toLocal();
-    final hour = date.hour.toString().padLeft(2, '0');
-    final minute = date.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
+  bool get _isUpcoming => event.startTime.isAfter(DateTime.now());
+  bool get _isOngoing =>
+      DateTime.now().isAfter(event.startTime) &&
+      DateTime.now().isBefore(event.endTime);
+
+  String get _statusLabel {
+    if (_isOngoing) return 'Đang diễn ra';
+    if (_isUpcoming) return 'Sắp tới';
+    return 'Đã kết thúc';
   }
 
-  String _formatDate(DateTime dateTime) {
-    final date = dateTime.toLocal();
-    final months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
+  Color get _statusColor {
+    if (_isOngoing) return const Color(0xFF16A34A);
+    if (_isUpcoming) return const Color(0xFF2563EB);
+    return const Color(0xFF94A3B8);
+  }
+
+  Color get _statusBg {
+    if (_isOngoing) return const Color(0xFFF0FDF4);
+    if (_isUpcoming) return const Color(0xFFEFF6FF);
+    return const Color(0xFFF8FAFC);
+  }
+
+  String _fmtDate(DateTime dt) {
+    final d = dt.toLocal();
+    const months = ['Thg 1','Thg 2','Thg 3','Thg 4','Thg 5','Thg 6','Thg 7','Thg 8','Thg 9','Thg 10','Thg 11','Thg 12'];
+    return '${d.day} ${months[d.month - 1]}, ${d.year}';
+  }
+
+  String _fmtTime(DateTime dt) {
+    final d = dt.toLocal();
+    return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+  }
+
+  // Color accent based on event id
+  Color get _accentColor {
+    final colors = [
+      const Color(0xFF2563EB),
+      const Color(0xFF7C3AED),
+      const Color(0xFF0891B2),
+      const Color(0xFF059669),
+      const Color(0xFFD97706),
     ];
-    return '${months[date.month - 1]} ${date.day}, ${date.year}';
+    return colors[event.id % colors.length];
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isUpcoming = event.startTime.isAfter(DateTime.now());
-
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: _accentColor.withOpacity(0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Color accent bar + header
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    _accentColor.withOpacity(0.08),
+                    _accentColor.withOpacity(0.03),
+                  ],
+                ),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(18),
+                  topRight: Radius.circular(18),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Icon box
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [_accentColor, _accentColor.withOpacity(0.7)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: const Icon(Icons.event_rounded, color: Colors.white, size: 22),
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           event.title,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: theme.colorScheme.onSurface,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0F172A),
+                            letterSpacing: -0.2,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 5),
                         Row(
                           children: [
-                            Icon(
-                              Icons.location_on_outlined,
-                              size: 16,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                            const SizedBox(width: 6),
+                            Icon(Icons.location_on_rounded, size: 13, color: _accentColor),
+                            const SizedBox(width: 4),
                             Expanded(
                               child: Text(
                                 event.location,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
+                                style: TextStyle(fontSize: 12, color: _accentColor.withOpacity(0.8), fontWeight: FontWeight.w500),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -103,121 +157,137 @@ class EventCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 8),
+                  // Status badge
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                     decoration: BoxDecoration(
-                      color: isUpcoming
-                          ? theme.colorScheme.primaryContainer
-                          : theme.colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(8),
+                      color: _statusBg,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: _statusColor.withOpacity(0.2)),
                     ),
-                    child: Text(
-                      isUpcoming ? 'Upcoming' : 'Past',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: isUpcoming
-                            ? theme.colorScheme.onPrimaryContainer
-                            : theme.colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_isOngoing)
+                          Container(
+                            width: 6,
+                            height: 6,
+                            margin: const EdgeInsets.only(right: 5),
+                            decoration: BoxDecoration(
+                              color: _statusColor,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        Text(
+                          _statusLabel,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: _statusColor,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Row(
+            ),
+
+            // Divider
+            Divider(height: 1, color: const Color(0xFFE2E8F0).withOpacity(0.6)),
+
+            // Info row
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
                 children: [
-                  Icon(
-                    Icons.calendar_today_outlined,
-                    size: 16,
-                    color: theme.colorScheme.onSurfaceVariant,
+                  _InfoChip(
+                    icon: Icons.calendar_today_rounded,
+                    label: _fmtDate(event.startTime),
+                    color: _accentColor,
                   ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      '${_formatDate(event.startTime)} at ${_formatTime(event.startTime)}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                  const SizedBox(width: 12),
+                  _InfoChip(
+                    icon: Icons.access_time_rounded,
+                    label: _fmtTime(event.startTime),
+                    color: _accentColor,
                   ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Icon(
-                    Icons.people_outline,
-                    size: 16,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Max ${event.maxParticipants} participants',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
+                  const Spacer(),
+                  _InfoChip(
+                    icon: Icons.people_outline_rounded,
+                    label: '${event.maxParticipants}',
+                    color: _accentColor,
                   ),
                 ],
               ),
-              if (isOrganizer) ...[
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    alignment: WrapAlignment.end,
-                    children: [
-                      TextButton.icon(
-                        onPressed: onEdit,
-                        icon: const Icon(Icons.edit, size: 16),
-                        label: const Text('Edit'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: theme.colorScheme.primary,
-                          textStyle: theme.textTheme.labelSmall,
+            ),
+
+            // Registered badge or arrow
+            if (isRegistered || onTap != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                child: Row(
+                  children: [
+                    if (isRegistered)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF0FDF4),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFBBF7D0)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.check_circle_rounded, size: 13, color: Color(0xFF16A34A)),
+                            SizedBox(width: 5),
+                            Text('Đã đăng ký', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF15803D))),
+                          ],
                         ),
                       ),
-                      TextButton.icon(
-                        onPressed: onDelete,
-                        icon: const Icon(Icons.delete, size: 16),
-                        label: const Text('Delete'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: theme.colorScheme.error,
-                          textStyle: theme.textTheme.labelSmall,
+                    const Spacer(),
+                    if (onTap != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _accentColor.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('Xem chi tiết', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _accentColor)),
+                            const SizedBox(width: 4),
+                            Icon(Icons.arrow_forward_ios_rounded, size: 10, color: _accentColor),
+                          ],
                         ),
                       ),
-                      TextButton.icon(
-                        onPressed: onViewRegistrations,
-                        icon: const Icon(Icons.people_alt_outlined, size: 16),
-                        label: const Text('View Registrations'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: theme.colorScheme.secondary,
-                          textStyle: theme.textTheme.labelSmall,
-                        ),
-                      ),
-                      TextButton.icon(
-                        onPressed: onScanQr,
-                        icon: const Icon(Icons.qr_code_scanner, size: 16),
-                        label: const Text('Scan QR'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: theme.colorScheme.primary,
-                          textStyle: theme.textTheme.labelSmall,
-                        ),
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
-              ],
-            ],
-          ),
+              ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  const _InfoChip({required this.icon, required this.label, required this.color});
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: color.withOpacity(0.6)),
+        const SizedBox(width: 4),
+        Text(label, style: TextStyle(fontSize: 12, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
+      ],
     );
   }
 }
