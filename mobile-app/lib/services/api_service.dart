@@ -53,7 +53,9 @@ class ApiService {
       }
     }
 
-    return http.post(uri, headers: headers, body: jsonEncode(body ?? {}));
+    return http
+        .post(uri, headers: headers, body: jsonEncode(body ?? {}))
+        .timeout(const Duration(seconds: 10));
   }
 
   Future<http.Response> put(
@@ -77,7 +79,9 @@ class ApiService {
       }
     }
 
-    return http.put(uri, headers: headers, body: jsonEncode(body ?? {}));
+    return http
+        .put(uri, headers: headers, body: jsonEncode(body ?? {}))
+        .timeout(const Duration(seconds: 10));
   }
 
   Future<http.Response> get(
@@ -100,7 +104,7 @@ class ApiService {
       }
     }
 
-    return http.get(uri, headers: headers);
+    return http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
   }
 
   Future<http.Response> delete(
@@ -123,6 +127,6 @@ class ApiService {
       }
     }
 
-    return http.delete(uri, headers: headers);
+    return http.delete(uri, headers: headers).timeout(const Duration(seconds: 10));
   }
 }

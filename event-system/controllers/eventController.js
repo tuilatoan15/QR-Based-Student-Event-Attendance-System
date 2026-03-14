@@ -6,7 +6,9 @@ const {
   getEventParticipants: getEventParticipantsModel,
   updateEvent,
   softDeleteEvent,
-  countRegistrationsForEvent
+  countRegistrationsForEvent,
+  countAllEvents,
+  countEventsByOrganizer
 } = require('../models/eventModel');
 const {
   createRegistration,
@@ -32,10 +34,14 @@ const getEvents = async (req, res, next) => {
     const offset = (safePage - 1) * safeLimit;
 
     const events = await getAllEvents(offset, safeLimit);
+    const total = await countAllEvents();
+    const totalPages = Math.ceil(total / safeLimit);
 
     return paginatedSuccessResponse(res, 200, 'Events retrieved successfully', events, {
       page: safePage,
-      limit: safeLimit
+      limit: safeLimit,
+      total,
+      totalPages
     });
   } catch (err) {
     next(err);
@@ -307,17 +313,24 @@ const getOrganizerEvents = async (req, res, next) => {
     const offset = (safePage - 1) * safeLimit;
 
     let events;
+    let total = 0;
     if (req.user.role === 'admin') {
       // Admins can see all events
       events = await getAllEvents(offset, safeLimit);
+      total = await countAllEvents();
     } else {
       // Organizers see only their own events
       events = await getEventsByOrganizer(req.user.id, offset, safeLimit);
+      total = await countEventsByOrganizer(req.user.id);
     }
+
+    const totalPages = Math.ceil(total / safeLimit);
 
     return paginatedSuccessResponse(res, 200, 'Events retrieved successfully', events, {
       page: safePage,
-      limit: safeLimit
+      limit: safeLimit,
+      total,
+      totalPages
     });
   } catch (err) {
     next(err);
