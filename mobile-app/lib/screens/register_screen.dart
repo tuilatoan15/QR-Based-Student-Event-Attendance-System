@@ -89,19 +89,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [Color(0xFF1E40AF), Color(0xFF0EA5E9)],
+                  colors: [Color(0xFF00CCFF), Color(0xFF0EA5E9)],
                 ),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(14),
+                    width: 100,
+                    height: 100,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.person_add_alt_1_rounded, color: Colors.white, size: 28),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(50),
+                      child: Image.asset('assets/logo/logo.png', fit: BoxFit.cover),
+                    ),
                   ),
                   const SizedBox(width: 14),
                   const Expanded(
@@ -126,7 +130,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF2563EB).withOpacity(0.07),
+                    color: const Color(0xFF00CCFF).withOpacity(0.07),
                     blurRadius: 24,
                     offset: const Offset(0, 8),
                   ),

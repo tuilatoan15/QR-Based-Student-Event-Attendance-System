@@ -79,17 +79,17 @@ class _LoginScreenState extends State<LoginScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
-                      width: 72,
-                      height: 72,
+                      width: 140,
+                      height: 140,
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
+                        shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10),
                         ],
                       ),
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(70),
                         child: Image.asset('assets/logo/logo.png', fit: BoxFit.cover),
                       ),
                     ),
