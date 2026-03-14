@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { eventApi, type Event } from '../api/eventApi';
 import { attendanceApi } from '../api/attendanceApi';
 import { usersApi } from '../api/usersApi';
 import StatCard from '../components/StatCard';
+import { useAuth } from '../context/AuthContext';
 import AttendanceChart, {
   type AttendanceRatePoint,
 } from '../components/AttendanceChart';
@@ -11,6 +13,8 @@ import DashboardEventTable, {
 } from '../components/DashboardEventTable';
 
 const DashboardPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
   const [totalStudents, setTotalStudents] = useState(0);
   const [totalRegistrations, setTotalRegistrations] = useState(0);
@@ -28,61 +32,94 @@ const DashboardPage: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
+        const isOrg = user?.role === 'organizer';
+
+        // Only admins can call listUsers; organizers skip it to avoid 403
         const [evs, usersRes] = await Promise.all([
-          eventApi.getAllEvents(),
-          usersApi.listUsers({ page: 1, limit: 1 }),
+          eventApi.getAllEvents(isOrg),
+          isOrg ? Promise.resolve(null) : usersApi.listUsers({ page: 1, limit: 1 }),
         ]);
         setEvents(evs);
-        const totalUsers = usersRes.data?.pagination?.total ?? 0;
+        const totalUsers = usersRes?.data?.pagination?.total ?? 0;
         setTotalStudents(totalUsers);
 
         const sortedLatest = [...evs].sort(
           (a: any, b: any) =>
             new Date(b.start_time).getTime() - new Date(a.start_time).getTime(),
         );
-        const latest = sortedLatest.slice(0, 8);
 
-        const perEvent = await Promise.all(
-          latest.map(async (ev) => {
-            const [regsRes, statsRes] = await Promise.all([
-              eventApi.getEventRegistrations(ev.id),
-              attendanceApi.getEventAttendanceStats(ev.id),
-            ]);
-            const regsData = regsRes.data?.data ?? regsRes.data;
-            const regs = Array.isArray(regsData) ? regsData : [];
-            const stats = statsRes.data?.data ?? statsRes.data;
-            const registered = Number(stats?.total_registered ?? regs.length);
-            const attended = Number(stats?.total_attended ?? 0);
-            const rate = Number(stats?.attendance_rate ?? 0);
-            return { ev, registered, attended, rate };
-          }),
-        );
+        type PerEventStats = {
+          ev: Event;
+          registered: number;
+          attended: number;
+          rate: number;
+        };
+
+        // Fetch stats for all events in chunks to avoid overwhelming the server
+        const perEvent: PerEventStats[] = [];
+        for (let i = 0; i < evs.length; i += 10) {
+          const chunk = evs.slice(i, i + 10);
+          const results = await Promise.all(
+            chunk.map(async (ev) => {
+              try {
+                const statsRes = await attendanceApi.getEventAttendanceStats(ev.id);
+                const stats = statsRes.data?.data ?? statsRes.data;
+                const registered = Number(stats?.total_registered ?? 0);
+                const attended = Number(stats?.total_attended ?? 0);
+                const rate = Number(stats?.attendance_rate ?? 0);
+                return { ev, registered, attended, rate };
+              } catch (e) {
+                return { ev, registered: 0, attended: 0, rate: 0 };
+              }
+            }),
+          );
+          perEvent.push(...results);
+        }
 
         const registrationsSum = perEvent.reduce((acc, x) => acc + x.registered, 0);
         const attendedSum = perEvent.reduce((acc, x) => acc + x.attended, 0);
         setTotalRegistrations(registrationsSum);
         setTotalCheckins(attendedSum);
 
+        // For the Attendance Rate chart: Prioritize events that have registrations,
+        // and prefer newest events that have started checking in, or highest registration counts.
+        const chartData = [...perEvent]
+          .filter((x) => x.registered > 0)
+          .sort((a, b) => b.rate - a.rate || b.registered - a.registered)
+          .slice(0, 8)
+          .map((x) => ({
+            name: x.ev.title.length > 16 ? `${x.ev.title.slice(0, 16)}…` : x.ev.title,
+            attendance_rate: x.rate,
+            registered: x.registered,
+            attended: x.attended,
+          }));
+
+        // Fallback to top 8 from recently created/sorted if there are none with registrations
         setAttendanceRateData(
-          perEvent
-            .map((x) => ({
-              name: x.ev.title.length > 16 ? `${x.ev.title.slice(0, 16)}…` : x.ev.title,
-              attendance_rate: x.rate,
-              registered: x.registered,
-              attended: x.attended,
-            }))
-            .sort((a, b) => b.attendance_rate - a.attendance_rate),
+          chartData.length > 0
+            ? chartData
+            : perEvent.slice(0, 8).map((x) => ({
+                name: x.ev.title.length > 16 ? `${x.ev.title.slice(0, 16)}…` : x.ev.title,
+                attendance_rate: x.rate,
+                registered: x.registered,
+                attended: x.attended,
+              }))
         );
 
+        // For "Sự kiện gần đây" table, just take the 8 most recently starting events
+        const latest = sortedLatest.slice(0, 8);
         setLatestRows(
-          perEvent.map((x) => ({
-            id: x.ev.id,
-            title: x.ev.title,
-            location: x.ev.location,
-            start_time: x.ev.start_time,
-            registered: x.registered,
-            checked_in: x.attended,
-          })),
+          latest.map((ev) => {
+            const stats = perEvent.find((p) => p.ev.id === ev.id);
+            return {
+              id: ev.id,
+              title: ev.title,
+              location: ev.location,
+              start_time: ev.start_time,
+              registered: stats?.registered || 0,
+              checked_in: stats?.attended || 0,
+            };
+          })
         );
       } catch (err: any) {
         setError(err?.response?.data?.message || 'Không thể tải dữ liệu dashboard.');
@@ -174,6 +211,7 @@ const DashboardPage: React.FC = () => {
               </svg>
             }
             subtext={`${upcomingEvents} sắp diễn ra`}
+            onClick={() => navigate('/events')}
           />
           <StatCard
             title="Sinh viên"
@@ -184,6 +222,7 @@ const DashboardPage: React.FC = () => {
                 <path d="M2 17v-1a5 5 0 015-5h2a5 5 0 015 5v1" stroke="#15803d" strokeWidth="1.6" strokeLinecap="round"/>
               </svg>
             }
+            onClick={() => navigate('/users')}
           />
           <StatCard
             title="Đăng ký"
@@ -193,6 +232,7 @@ const DashboardPage: React.FC = () => {
                 <path d="M6 2h8a2 2 0 012 2v14l-5-3-5 3V4a2 2 0 012-2z" stroke="#c2410c" strokeWidth="1.6" strokeLinejoin="round"/>
               </svg>
             }
+            onClick={() => navigate('/events')}
           />
           <StatCard
             title="Check-in"
@@ -203,6 +243,7 @@ const DashboardPage: React.FC = () => {
                 <circle cx="10" cy="10" r="8" stroke="#7e22ce" strokeWidth="1.6"/>
               </svg>
             }
+            onClick={() => navigate('/attendance')}
           />
         </div>
 

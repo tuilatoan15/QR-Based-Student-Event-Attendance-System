@@ -4,10 +4,12 @@ import { attendanceApi, type AttendanceListRecord } from '../api/attendanceApi';
 import { eventApi, type Event } from '../api/eventApi';
 import { exportToCsv, exportToXlsx } from '../utils/exporters';
 import { notifySuccess } from '../utils/notify';
+import { useAuth } from '../context/AuthContext';
 
 type ScanResult = { at: string; ok: boolean; message: string; };
 
 const AttendancePage: React.FC = () => {
+  const { user } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
   const [records, setRecords] = useState<AttendanceListRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -18,26 +20,43 @@ const AttendancePage: React.FC = () => {
   const [scanning, setScanning] = useState(false);
   const [processingScan, setProcessingScan] = useState(false);
 
+  const reload = async (eid: number | 'all' = eventId, q: string = search) => {
+    setLoading(true);
+    try {
+      const res = await attendanceApi.listAttendance({
+        event_id: eid === 'all' ? undefined : eid,
+        search: q.trim() ? q.trim() : undefined,
+      });
+      const data = res.data?.data ?? res.data;
+      setRecords(Array.isArray(data) ? data : []);
+    } finally { setLoading(false); }
+  };
+
+  // Load events list on mount, then load records with default filter
   useEffect(() => {
-    const load = async () => {
+    const init = async () => {
       setLoading(true);
       try {
-        const [evsRes, attRes] = await Promise.all([
-          eventApi.getAllEvents(),
-          attendanceApi.listAttendance(),
-        ]);
+        const isOrg = user?.role === 'organizer';
+        const evsRes = await eventApi.getAllEvents(isOrg);
         setEvents(Array.isArray(evsRes) ? evsRes : []);
-        const data = attRes.data?.data ?? attRes.data;
-        setRecords(Array.isArray(data) ? data : []);
+        // Load default records (all events = checked-in only)
+        await reload('all', '');
       } finally { setLoading(false); }
     };
-    void load();
+    void init();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Reload when eventId changes — pass new value directly to avoid stale closure
+  useEffect(() => {
+    void reload(eventId, search);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return records.filter((r) => {
-      if (eventId !== 'all' && r.event_id !== eventId) return false;
       if (!term) return true;
       return (
         (r.student_name ?? '').toLowerCase().includes(term) ||
@@ -46,19 +65,7 @@ const AttendancePage: React.FC = () => {
         (r.event_title ?? '').toLowerCase().includes(term)
       );
     });
-  }, [records, eventId, search]);
-
-  const reload = async () => {
-    setLoading(true);
-    try {
-      const res = await attendanceApi.listAttendance({
-        event_id: eventId === 'all' ? undefined : eventId,
-        search: search.trim() ? search.trim() : undefined,
-      });
-      const data = res.data?.data ?? res.data;
-      setRecords(Array.isArray(data) ? data : []);
-    } finally { setLoading(false); }
-  };
+  }, [records, search]);
 
   const onManualCheckin = async () => {
     const id = parseInt(manualRegId, 10);
@@ -66,7 +73,7 @@ const AttendancePage: React.FC = () => {
     const res = await attendanceApi.manualCheckIn(id);
     notifySuccess(res.data?.message || 'Check-in thủ công thành công');
     setManualRegId('');
-    await reload();
+    await reload(eventId, search);
   };
 
   const onExportCsv = () => {
@@ -89,7 +96,7 @@ const AttendancePage: React.FC = () => {
       const msg = res.data?.message || 'Check-in thành công';
       setScanResults(prev => [{ at: new Date().toISOString(), ok: true, message: msg }, ...prev].slice(0, 8));
       notifySuccess(msg);
-      await reload();
+      await reload(eventId, search);
     } catch (err: any) {
       const msg = err?.response?.data?.message || 'Check-in thất bại. Kiểm tra lại mã QR.';
       setScanResults(prev => [{ at: new Date().toISOString(), ok: false, message: msg }, ...prev].slice(0, 8));
@@ -139,11 +146,12 @@ const AttendancePage: React.FC = () => {
         .att-table tbody td{padding:12px 16px;color:#334155;vertical-align:middle;}
         .att-student-name{font-weight:600;color:#0f172a;font-size:13.5px;}
         .att-student-email{font-size:11.5px;color:#94a3b8;margin-top:2px;}
-        .att-badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11.5px;font-weight:600;}
-        .att-badge-attended{background:#f0fdf4;color:#15803d;}
-        .att-badge-reg{background:#eff6ff;color:#1d4ed8;}
+        .att-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11.5px;font-weight:600;}
+        .att-badge-attended{background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;}
+        .att-badge-reg{background:#fafafa;color:#64748b;border:1px solid #e2e8f0;}
         .att-empty{padding:40px 16px;text-align:center;color:#94a3b8;font-size:13px;}
         .att-count-badge{font-size:12px;color:#64748b;background:#f0f7ff;border:1px solid #e0eeff;padding:4px 10px;border-radius:20px;}
+        .att-count-attended{font-size:12px;color:#15803d;background:#f0fdf4;border:1px solid #bbf7d0;padding:4px 10px;border-radius:20px;margin-left:6px;}
 
         .att-manual-input{display:flex;gap:8px;}
         .att-manual-text{flex:1;padding:9px 12px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;color:#0f172a;outline:none;transition:border-color .15s;}
@@ -194,16 +202,25 @@ const AttendancePage: React.FC = () => {
             <div className="att-card">
               <div className="att-card-head">
                 <span className="att-card-title">Bộ lọc</span>
-                <span className="att-count-badge">{filtered.length} bản ghi</span>
+                <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+                  <span className="att-count-badge">{filtered.length} sinh viên</span>
+                  {eventId !== 'all' && (
+                    <span className="att-count-attended">
+                      ✓ {filtered.filter(r => r.registration_status === 'attended').length} đã check-in
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="att-card-body">
                 <div className="att-filters">
-                  <select className="att-select" value={eventId} onChange={e=>setEventId(e.target.value==='all'?'all':Number(e.target.value))}>
-                    <option value="all">Tất cả sự kiện</option>
-                    {events.map(ev=><option key={ev.id} value={ev.id}>{ev.title}</option>)}
+                  <select className="att-select" value={eventId} onChange={e => {
+                    setEventId(e.target.value === 'all' ? 'all' : Number(e.target.value));
+                  }}>
+                    <option value="all">Tất cả sự kiện (chỉ checked-in)</option>
+                    {events.map(ev => <option key={ev.id} value={ev.id}>{ev.title}</option>)}
                   </select>
                   <input type="text" placeholder="Tìm sinh viên, email, sự kiện..." className="att-search-input" value={search} onChange={e=>setSearch(e.target.value)}/>
-                  <button type="button" onClick={()=>void reload()} className="att-apply-btn">Lọc</button>
+                  <button type="button" onClick={() => void reload(eventId, search)} className="att-apply-btn">Lọc</button>
                 </div>
               </div>
             </div>
@@ -219,18 +236,20 @@ const AttendancePage: React.FC = () => {
                     <th>Trạng thái</th>
                   </tr></thead>
                   <tbody>
-                    {filtered.map(r=>(
-                      <tr key={r.attendance_id}>
+                    {filtered.map(r => (
+                      <tr key={`${r.registration_id}-${r.user_id}`}>
                         <td>
                           <div className="att-student-name">{r.student_name}</div>
                           <div className="att-student-email">{r.email}</div>
                           {r.student_code && <div className="att-student-email">{r.student_code}</div>}
                         </td>
                         <td style={{fontSize:13,color:'#334155',maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.event_title}</td>
-                        <td style={{fontSize:12.5,color:'#64748b',whiteSpace:'nowrap'}}>{r.check_in_time?new Date(r.check_in_time).toLocaleString('vi-VN'):'—'}</td>
+                        <td style={{fontSize:12.5,color:'#64748b',whiteSpace:'nowrap'}}>
+                          {r.check_in_time ? new Date(r.check_in_time).toLocaleString('vi-VN') : '—'}
+                        </td>
                         <td>
-                          <span className={`att-badge ${r.registration_status==='attended'?'att-badge-attended':'att-badge-reg'}`}>
-                            {r.registration_status==='attended'?'✓ Đã check-in':r.registration_status}
+                          <span className={`att-badge ${r.registration_status === 'attended' ? 'att-badge-attended' : 'att-badge-reg'}`}>
+                            {r.registration_status === 'attended' ? '✓ Đã check-in' : '○ Chưa check-in'}
                           </span>
                         </td>
                       </tr>

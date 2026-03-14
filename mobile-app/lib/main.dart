@@ -4,12 +4,15 @@ import 'package:provider/provider.dart';
 // import 'config/api_config.dart';
 import 'services/auth_service.dart';
 import 'services/event_service.dart';
+import 'services/notification_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/event_list_screen.dart';
 import 'screens/event_detail_screen.dart';
 import 'screens/my_events_screen.dart';
 import 'screens/qr_screen.dart';
+import 'screens/profile_screen.dart';
+import 'screens/notifications_screen.dart';
 // Admin/organizer features are now handled in the web dashboard only.
 
 void main() async {
@@ -30,6 +33,9 @@ class SmartEventAttendanceApp extends StatelessWidget {
         ChangeNotifierProvider<EventService>(
           create: (_) => EventService(),
         ),
+        ChangeNotifierProvider<NotificationService>(
+          create: (_) => NotificationService(),
+        ),
       ],
       child: MaterialApp(
         title: 'Smart Event Attendance',
@@ -46,6 +52,8 @@ class SmartEventAttendanceApp extends StatelessWidget {
           EventDetailScreen.routeName: (context) => const EventDetailScreen(),
           MyEventsScreen.routeName: (context) => const MyEventsScreen(),
           QRScreen.routeName: (context) => const QRScreen(),
+          ProfileScreen.routeName: (context) => const ProfileScreen(),
+          NotificationsScreen.routeName: (context) => const NotificationsScreen(),
         },
       ),
     );

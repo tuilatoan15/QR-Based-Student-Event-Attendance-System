@@ -38,15 +38,33 @@ const scanQr = async (req, res, next) => {
       return errorResponse(res, 404, 'Invalid QR code');
     }
 
+    // NEW: Check if the organizer has permission for this event
+    const eventDetails = await getEventById(registration.event_id);
+    if (!eventDetails) {
+      return errorResponse(res, 404, 'Event associated with this QR not found');
+    }
+
+    if (req.user.role !== 'admin' && eventDetails.created_by !== req.user.id) {
+      return errorResponse(res, 403, 'Bạn không có quyền điểm danh cho sự kiện này');
+    }
+
     // Check if already attended
     if (registration.status === REGISTRATION_STATUS.ATTENDED) {
-      return errorResponse(res, 409, 'Already checked in');
+      return successResponse(res, 200, 'Sinh viên này đã điểm danh trước đó', {
+        already_checked_in: true,
+        student_name: registration.full_name,
+        event_title: registration.event_title
+      });
     }
 
     // Check if attendance record already exists for this registration
     const hasAttendance = await hasAttendanceForRegistration(registration.id);
     if (hasAttendance) {
-      return errorResponse(res, 409, 'Already checked in');
+      return successResponse(res, 200, 'Sinh viên này đã điểm danh trước đó', {
+        already_checked_in: true,
+        student_name: registration.full_name,
+        event_title: registration.event_title
+      });
     }
 
     // Get event details for Google Sheets update
@@ -80,7 +98,14 @@ const scanQr = async (req, res, next) => {
         .input('status', sql.NVarChar(20), REGISTRATION_STATUS.ATTENDED)
         .query('UPDATE registrations SET status = @status WHERE id = @id');
 
-      // Commit transaction if both operations succeed
+      // Create notification for student
+      await request
+        .input('student_id', sql.Int, registration.user_id)
+        .input('notif_title', sql.NVarChar(255), 'Điểm danh thành công')
+        .input('notif_msg', sql.NVarChar(sql.MAX), 'Bạn đã điểm danh thành công sự kiện: ' + registration.event_title)
+        .query(`INSERT INTO notifications (user_id, title, message) VALUES (@student_id, @notif_title, @notif_msg)`);
+
+      // Commit transaction if all operations succeed
       await transaction.commit();
 
       // Update Google Sheet (non-critical, don't fail check-in if this fails)
@@ -93,8 +118,8 @@ const scanQr = async (req, res, next) => {
       }
 
       logCheckin(registration.id, req.user.id);
-
-      return successResponse(res, 200, 'Check-in successful', {
+      
+      return successResponse(res, 200, 'Điểm danh thành công!', {
         registration_id: registration.id,
         student_name: registration.full_name,
         event_id: registration.event_id,
@@ -103,6 +128,14 @@ const scanQr = async (req, res, next) => {
       });
     } catch (transactionError) {
       await transaction.rollback();
+      // Handle Unique Key constraint violation (SQL Server error code 2627)
+      if (transactionError.number === 2627 || transactionError.code === 'EREQUEST' && transactionError.message.includes('UNIQUE KEY')) {
+        return successResponse(res, 200, 'Sinh viên này đã điểm danh trước đó', {
+          already_checked_in: true,
+          student_name: registration.full_name,
+          event_title: registration.event_title
+        });
+      }
       throw transactionError;
     }
   } catch (err) {
@@ -117,6 +150,12 @@ const getEventAttendance = async (req, res, next) => {
     if (!event) {
       return errorResponse(res, 404, 'Event not found');
     }
+
+    // Check ownership
+    if (req.user.role !== 'admin' && event.created_by !== req.user.id) {
+      return errorResponse(res, 403, 'Permission denied: This event does not belong to you');
+    }
+
     const list = await getAttendancesForEvent(eventId);
     return successResponse(res, 200, 'Attendances retrieved successfully', list);
   } catch (err) {
@@ -134,6 +173,11 @@ const getEventAttendanceStats = async (req, res, next) => {
     const event = await getEventById(eventId);
     if (!event) {
       return errorResponse(res, 404, 'Event not found');
+    }
+
+    // Check ownership
+    if (req.user.role !== 'admin' && event.created_by !== req.user.id) {
+      return errorResponse(res, 403, 'Permission denied: This event does not belong to you');
     }
 
     const pool = await poolPromise;

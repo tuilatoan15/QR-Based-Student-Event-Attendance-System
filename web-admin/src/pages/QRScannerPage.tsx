@@ -5,7 +5,7 @@ import { attendanceApi } from '../api/attendanceApi';
 
 const QRScannerPage: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const [lastResult, setLastResult] = useState<string | null>(null);
+  const [lastResult, setLastResult] = useState<{ message: string; isWarning?: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [scanCount, setScanCount] = useState(0);
@@ -20,8 +20,9 @@ const QRScannerPage: React.FC = () => {
     try {
       const res = await attendanceApi.checkIn(data);
       const message = res.data?.message || 'Check-in thành công!';
-      setLastResult(message);
-      setScanCount(c => c + 1);
+      const isWarning = res.data?.data?.already_checked_in === true;
+      setLastResult({ message, isWarning });
+      if (!isWarning) setScanCount(c => c + 1);
     } catch (err: any) {
       const backendMessage = err?.response?.data?.message;
       setError(backendMessage || 'Check-in thất bại. Vui lòng kiểm tra mã QR.');
@@ -61,6 +62,10 @@ const QRScannerPage: React.FC = () => {
         .qr-success{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px 16px;display:flex;align-items:flex-start;gap:10px;}
         .qr-success-icon{width:22px;height:22px;background:#22c55e;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
         .qr-success-text{font-size:13.5px;font-weight:600;color:#166534;}
+        
+        .qr-warning{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:14px 16px;display:flex;align-items:flex-start;gap:10px;}
+        .qr-warning-icon{width:22px;height:22px;background:#f59e0b;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+        .qr-warning-text{font-size:13.5px;font-weight:600;color:#92400e;}
 
         .qr-error{background:#fff1f2;border:1px solid #fecaca;border-radius:10px;padding:14px 16px;display:flex;align-items:flex-start;gap:10px;}
         .qr-error-icon{width:22px;height:22px;background:#f43f5e;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
@@ -121,13 +126,17 @@ const QRScannerPage: React.FC = () => {
               )}
 
               {lastResult && !processing && (
-                <div className="qr-success" style={{marginTop:12}}>
-                  <div className="qr-success-icon">
+                <div className={lastResult.isWarning ? "qr-warning" : "qr-success"} style={{marginTop:12}}>
+                  <div className={lastResult.isWarning ? "qr-warning-icon" : "qr-success-icon"}>
                     <svg viewBox="0 0 14 14" fill="none" width="10" height="10">
-                      <path d="M2 7l3.5 3.5L12 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      {lastResult.isWarning ? (
+                        <path d="M7 3v4M7 9h.01" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+                      ) : (
+                        <path d="M2 7l3.5 3.5L12 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      )}
                     </svg>
                   </div>
-                  <div className="qr-success-text">{lastResult}</div>
+                  <div className={lastResult.isWarning ? "qr-warning-text" : "qr-success-text"}>{lastResult.message}</div>
                 </div>
               )}
 

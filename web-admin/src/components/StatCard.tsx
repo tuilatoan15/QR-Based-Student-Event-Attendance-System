@@ -5,6 +5,7 @@ type StatCardProps = {
   value: number | string;
   icon: React.ReactNode;
   subtext?: string;
+  onClick?: () => void;
 };
 
 const CARD_THEMES = [
@@ -16,7 +17,7 @@ const CARD_THEMES = [
 
 let cardIndex = 0;
 
-const StatCard: React.FC<StatCardProps> = ({ title, value, icon, subtext }) => {
+const StatCard: React.FC<StatCardProps> = ({ title, value, icon, subtext, onClick }) => {
   // Pick theme by cycling — wrap in useMemo if needed
   const theme = CARD_THEMES[cardIndex++ % CARD_THEMES.length];
 
@@ -33,7 +34,8 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, icon, subtext }) => {
           flex-direction: column;
           gap: 14px;
           transition: box-shadow .18s, transform .18s;
-          cursor: default;
+          cursor: ${onClick ? 'pointer' : 'default'};
+          user-select: none;
         }
         .sc-wrap:hover {
           box-shadow: 0 4px 20px rgba(14,165,233,0.14);
@@ -87,7 +89,7 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, icon, subtext }) => {
           width: 60%;
         }
       `}</style>
-      <div className="sc-wrap">
+      <div className="sc-wrap" onClick={onClick}>
         <div className="sc-top">
           <div>
             <div className="sc-title">{title}</div>
