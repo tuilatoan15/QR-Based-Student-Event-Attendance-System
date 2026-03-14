@@ -12,8 +12,8 @@ export type Event = {
 };
 
 export const eventApi = {
-  getEvents() {
-    return axiosClient.get('/events');
+  getEvents(params?: { page?: number; limit?: number }) {
+    return axiosClient.get('/events', { params });
   },
 
   getOrganizerEvents(params?: { page?: number; limit?: number }) {

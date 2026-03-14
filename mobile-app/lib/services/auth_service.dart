@@ -45,6 +45,12 @@ class AuthService extends ChangeNotifier {
         currentUser = null;
         _token = null;
       }
+    } else {
+      // Fix infinite spinner: if no user data, invalid session
+      if (_token != null) {
+        await prefs.remove('auth_token');
+        _token = null;
+      }
     }
 
     notifyListeners();

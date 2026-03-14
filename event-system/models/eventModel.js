@@ -150,6 +150,23 @@ const countRegistrationsForEvent = async (event_id) => {
   return result.recordset[0].count;
 };
 
+const countAllEvents = async () => {
+  const pool = await poolPromise;
+  const result = await pool
+    .request()
+    .query('SELECT COUNT(*) as total FROM events WHERE is_active = 1');
+  return result.recordset[0].total;
+};
+
+const countEventsByOrganizer = async (created_by) => {
+  const pool = await poolPromise;
+  const result = await pool
+    .request()
+    .input('created_by', sql.Int, created_by)
+    .query('SELECT COUNT(*) as total FROM events WHERE created_by = @created_by AND is_active = 1');
+  return result.recordset[0].total;
+};
+
 module.exports = {
   createEvent,
   getAllEvents,
@@ -158,5 +175,7 @@ module.exports = {
   getEventParticipants,
   updateEvent,
   softDeleteEvent,
-  countRegistrationsForEvent
+  countRegistrationsForEvent,
+  countAllEvents,
+  countEventsByOrganizer
 };
