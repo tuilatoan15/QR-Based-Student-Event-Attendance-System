@@ -126,4 +126,6 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_events_start_time' AN
   CREATE INDEX idx_events_start_time ON events(start_time);
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_reg_event' AND object_id = OBJECT_ID('dbo.registrations'))
   CREATE INDEX idx_reg_event ON registrations(event_id);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_events_created_by' AND object_id = OBJECT_ID('dbo.events'))
+  CREATE INDEX idx_events_created_by ON events(created_by);
 

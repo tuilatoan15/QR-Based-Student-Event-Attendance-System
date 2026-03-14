@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { eventApi, type Event } from '../api/eventApi';
 import { exportToCsv, exportToXlsx } from '../utils/exporters';
 
@@ -12,6 +12,7 @@ const getStatus = (raw?: string) => STATUS_MAP[(raw ?? '').toLowerCase()] ?? { l
 
 const EventDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [event, setEvent] = useState<Event | null>(null);
   const [participants, setParticipants] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,7 +86,7 @@ const EventDetailPage: React.FC = () => {
         .edp-hero-top{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:14px;margin-bottom:18px;}
         .edp-hero-title{font-size:24px;font-weight:800;color:#fff;letter-spacing:-.5px;max-width:560px;line-height:1.25;}
         .edp-hero-status{display:inline-flex;align-items:center;padding:5px 12px;border-radius:20px;font-size:12.5px;font-weight:600;background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);}
-        .edp-hero-actions{display:flex;gap:8px;flex-wrap:wrap;}
+        .edp-hero-actions{display:flex;gap:8px;flex-wrap:wrap;position:relative;z-index:2;}
         .edp-ha{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:9px;font-size:13px;font-weight:600;text-decoration:none;transition:all .14s;border:none;cursor:pointer;font-family:inherit;}
         .edp-ha-edit{background:#fff;color:#0284c7;}.edp-ha-edit:hover{background:#f0f7ff;}
         .edp-ha-parts{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);}.edp-ha-parts:hover{background:rgba(255,255,255,.25);}
@@ -158,10 +159,14 @@ const EventDetailPage: React.FC = () => {
                 <svg viewBox="0 0 14 14" fill="none" width="12" height="12"><circle cx="5" cy="4" r="2.5" stroke="currentColor" strokeWidth="1.3" /><path d="M1 12v-1a4 4 0 014-4h0a4 4 0 014 4v1" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>
                 Tham dự viên
               </Link>
-              <Link to={`/qr-scanner?eventId=${event.id}`} className="edp-ha edp-ha-scan">
-                <svg viewBox="0 0 14 14" fill="none" width="12" height="12"><path d="M1 4V2.5A1.5 1.5 0 012.5 1H4M10 1h1.5A1.5 1.5 0 0113 2.5V4M13 10v1.5A1.5 1.5 0 0111.5 13H10M4 13H2.5A1.5 1.5 0 011 11.5V10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /><rect x="3.5" y="3.5" width="3" height="3" rx=".5" stroke="currentColor" strokeWidth="1.2" /><rect x="7.5" y="7.5" width="3" height="3" rx=".5" stroke="currentColor" strokeWidth="1.2" /></svg>
-                Quét QR
-              </Link>
+              <button
+                  type="button"
+                  className="edp-ha edp-ha-scan"
+                  onClick={() => navigate(`/qr-scanner?eventId=${event.id}`)}
+                >
+                  <svg viewBox="0 0 14 14" fill="none" width="12" height="12"><path d="M1 4V2.5A1.5 1.5 0 012.5 1H4M10 1h1.5A1.5 1.5 0 0113 2.5V4M13 10v1.5A1.5 1.5 0 0111.5 13H10M4 13H2.5A1.5 1.5 0 011 11.5V10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /><rect x="3.5" y="3.5" width="3" height="3" rx=".5" stroke="currentColor" strokeWidth="1.2" /><rect x="7.5" y="7.5" width="3" height="3" rx=".5" stroke="currentColor" strokeWidth="1.2" /></svg>
+                  Quét QR
+                </button>
             </div>
           </div>
           <div className="edp-meta-grid">
@@ -233,10 +238,14 @@ const EventDetailPage: React.FC = () => {
                 <svg viewBox="0 0 14 14" fill="none" width="11" height="11"><path d="M2 10v2h10v-2M7 2v7M4 7l3 3 3-3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 Excel
               </button>
-              <Link to={`/qr-scanner?eventId=${event.id}`} className="edp-pa edp-pa-scan">
+              <button
+                type="button"
+                className="edp-pa edp-pa-scan"
+                onClick={() => navigate(`/qr-scanner?eventId=${event.id}`)}
+              >
                 <svg viewBox="0 0 14 14" fill="none" width="11" height="11"><path d="M1 4V2.5A1.5 1.5 0 012.5 1H4M10 1h1.5A1.5 1.5 0 0113 2.5V4M13 10v1.5A1.5 1.5 0 0111.5 13H10M4 13H2.5A1.5 1.5 0 011 11.5V10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>
                 Mở Scanner
-              </Link>
+              </button>
               <Link to={`/events/${event.id}/participants`} className="edp-pa edp-pa-all">
                 Xem tất cả →
               </Link>

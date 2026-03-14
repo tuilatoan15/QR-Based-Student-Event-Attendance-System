@@ -77,10 +77,21 @@ const listAttendanceHandler = async (req, res, next) => {
     const request = pool.request();
 
     let whereSql = 'WHERE 1=1';
+
+    // If user is organizer, only show registrations for their events
+    if (req.user.role !== 'admin') {
+      request.input('organizer_id', sql.Int, req.user.id);
+      whereSql += ' AND e.created_by = @organizer_id';
+    }
+
     if (eventId && Number.isInteger(eventId)) {
       request.input('event_id', sql.Int, eventId);
       whereSql += ' AND r.event_id = @event_id';
+    } else {
+      // When no specific event selected, only show attended records (default behaviour)
+      whereSql += " AND r.status = 'attended'";
     }
+
     if (search) {
       request.input('search', sql.NVarChar(255), `%${search}%`);
       whereSql += ' AND (u.full_name LIKE @search OR u.email LIKE @search OR u.student_code LIKE @search OR e.title LIKE @search)';
@@ -89,7 +100,7 @@ const listAttendanceHandler = async (req, res, next) => {
     const result = await request.query(
       `SELECT 
          a.id AS attendance_id,
-         a.registration_id,
+         r.id AS registration_id,
          a.checkin_time AS checkin_time,
          a.checkin_by AS checkin_by,
          r.event_id,
@@ -99,12 +110,15 @@ const listAttendanceHandler = async (req, res, next) => {
          u.email,
          u.student_code,
          e.title AS event_title
-       FROM attendances a
-       JOIN registrations r ON a.registration_id = r.id
+       FROM registrations r
        JOIN users u ON r.user_id = u.id
        JOIN events e ON r.event_id = e.id
+       LEFT JOIN attendances a ON a.registration_id = r.id
        ${whereSql}
-       ORDER BY a.checkin_time DESC`
+       ORDER BY 
+         CASE WHEN r.status = 'attended' THEN 0 ELSE 1 END,
+         a.checkin_time DESC,
+         r.registered_at DESC`
     );
 
     return successResponse(res, 200, 'Attendance retrieved successfully', result.recordset);

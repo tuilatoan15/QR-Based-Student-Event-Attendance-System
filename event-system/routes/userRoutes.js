@@ -8,10 +8,16 @@ const {
   updateUserRoleHandler,
   deactivateUserHandler
 } = require('../controllers/adminController');
+const {
+  getUserNotifications,
+  markNotificationAsRead
+} = require('../controllers/userController');
 
 const router = express.Router();
 
 router.get('/me/events', auth, getUserEvents);
+router.get('/me/notifications', auth, getUserNotifications);
+router.patch('/me/notifications/:id/read', validateId('id'), auth, markNotificationAsRead);
 
 // Admin user management
 router.get('/', auth, authorizeRoles('admin'), listUsersHandler);

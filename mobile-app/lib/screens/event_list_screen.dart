@@ -7,6 +7,9 @@ import '../widgets/event_card.dart';
 import 'event_detail_screen.dart';
 import 'login_screen.dart';
 import 'my_events_screen.dart';
+import 'profile_screen.dart';
+import 'notifications_screen.dart';
+import '../services/notification_service.dart';
 
 class EventListScreen extends StatefulWidget {
   const EventListScreen({super.key});
@@ -23,6 +26,7 @@ class _EventListScreenState extends State<EventListScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<EventService>().fetchEvents();
+      context.read<NotificationService>().fetchNotifications();
     });
   }
 
@@ -38,6 +42,51 @@ class _EventListScreenState extends State<EventListScreen> {
             icon: const Icon(Icons.event_available),
             onPressed: () {
               Navigator.of(context).pushNamed(MyEventsScreen.routeName);
+            },
+          ),
+          Consumer<NotificationService>(
+            builder: (context, notifService, _) {
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications),
+                    onPressed: () {
+                      Navigator.of(context).pushNamed(NotificationsScreen.routeName);
+                    },
+                  ),
+                  if (notifService.unreadCount > 0)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Text(
+                          '${notifService.unreadCount}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.person),
+            onPressed: () {
+              Navigator.of(context).pushNamed(ProfileScreen.routeName);
             },
           ),
           IconButton(

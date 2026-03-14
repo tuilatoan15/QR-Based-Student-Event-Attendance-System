@@ -138,6 +138,11 @@ const updateEventHandler = async (req, res, next) => {
       return errorResponse(res, 404, 'Event not found');
     }
 
+    // Check ownership
+    if (req.user.role !== 'admin' && event.created_by !== req.user.id) {
+      return errorResponse(res, 403, 'Permission denied: This event does not belong to you');
+    }
+
     const { title, description, location, start_time, end_time, max_participants, category_id, is_active } = req.body;
     const fields = {};
     if (title != null) fields.title = title;
@@ -163,6 +168,11 @@ const deleteEvent = async (req, res, next) => {
     const event = await getEventById(id);
     if (!event) {
       return errorResponse(res, 404, 'Event not found');
+    }
+
+    // Check ownership
+    if (req.user.role !== 'admin' && event.created_by !== req.user.id) {
+      return errorResponse(res, 403, 'Permission denied: This event does not belong to you');
     }
 
     await softDeleteEvent(id);
@@ -261,6 +271,12 @@ const getEventRegistrations = async (req, res, next) => {
     if (!event) {
       return errorResponse(res, 404, 'Event not found');
     }
+
+    // Check ownership
+    if (req.user.role !== 'admin' && event.created_by !== req.user.id) {
+      return errorResponse(res, 403, 'Permission denied: This event does not belong to you');
+    }
+
     const list = await getRegistrationsForEvent(eventId);
     return successResponse(res, 200, 'Registrations retrieved successfully', list);
   } catch (err) {
@@ -296,6 +312,12 @@ const getEventAttendances = async (req, res, next) => {
     if (!event) {
       return errorResponse(res, 404, 'Event not found');
     }
+
+    // Check ownership
+    if (req.user.role !== 'admin' && event.created_by !== req.user.id) {
+      return errorResponse(res, 403, 'Permission denied: This event does not belong to you');
+    }
+
     const list = await getAttendancesForEvent(eventId);
     return successResponse(res, 200, 'Attendances retrieved successfully', list);
   } catch (err) {

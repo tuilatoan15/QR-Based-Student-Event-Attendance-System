@@ -20,13 +20,14 @@ export const eventApi = {
     return axiosClient.get('/events/organizer/events', { params });
   },
 
-  async getAllEvents() {
+  async getAllEvents(isOrganizer = false) {
     const all: any[] = [];
     let page = 1;
     const limit = 100;
+    const endpoint = isOrganizer ? '/events/organizer/events' : '/events';
     // Backend uses pagination; loop until empty page
     while (true) {
-      const res = await axiosClient.get('/events', { params: { page, limit } });
+      const res = await axiosClient.get(endpoint, { params: { page, limit } });
       const payload = res.data?.data ?? res.data;
       const items = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : [];
       if (!items.length) break;
