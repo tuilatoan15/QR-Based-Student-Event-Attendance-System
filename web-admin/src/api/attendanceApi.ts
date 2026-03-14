@@ -55,5 +55,12 @@ export const attendanceApi = {
       registration_id: registrationId,
     });
   },
+
+  manualCheckinByStudent(studentCode: string, eventId: number) {
+    return axiosClient.post('/attendance/manual-checkin', {
+      student_code: studentCode,
+      event_id: eventId,
+    });
+  },
 };
 

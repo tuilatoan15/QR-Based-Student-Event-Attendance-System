@@ -85,9 +85,9 @@ const AdminLayout: React.FC = () => {
           min-height:60px;
         }
         .al-logo-icon{
-          width:32px;height:32px;flex-shrink:0;
+          width:90px;height:90px;flex-shrink:0;
           background:linear-gradient(135deg,#38bdf8,#0284c7);
-          border-radius:9px;display:flex;align-items:center;
+          border-radius:50%;display:flex;align-items:center;
           justify-content:center;
           box-shadow:0 2px 8px rgba(14,165,233,0.35);
         }
@@ -214,10 +214,7 @@ const AdminLayout: React.FC = () => {
         <aside className="al-sidebar">
           <div className="al-logo">
             <div className="al-logo-icon">
-              <svg viewBox="0 0 24 24" fill="none" width="18" height="18">
-                <path d="M9 12l2 2 4-4" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <circle cx="12" cy="12" r="9" stroke="white" strokeWidth="2"/>
-              </svg>
+              <img src="/assets/logo/logo.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
             </div>
             {!collapsed && <span className="al-logo-text">QR Events</span>}
             <button className="al-toggle" onClick={() => setCollapsed(!collapsed)} title={collapsed ? 'Mở rộng' : 'Thu gọn'}>
