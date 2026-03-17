@@ -75,15 +75,7 @@ class AuthService extends ChangeNotifier {
         final user = User.fromJson(userJson);
         final role = user.role.toLowerCase();
 
-        if (role != 'student' && role != '3') {
-          // Block non-student roles on mobile app
-          errorMessage =
-              'Only students are allowed to use the mobile application.';
-          // Ensure no token/session is stored
-          currentUser = null;
-          _token = null;
-        } else {
-          _token = data['token'] as String?;
+        _token = data['token'] as String?;
           currentUser = user;
 
           final prefs = await SharedPreferences.getInstance();
@@ -93,7 +85,6 @@ class AuthService extends ChangeNotifier {
           isLoading = false;
           notifyListeners();
           return true;
-        }
       } else {
         errorMessage = decoded['message'] as String? ?? 'Login failed';
       }

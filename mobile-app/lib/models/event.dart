@@ -6,6 +6,8 @@ class Event {
   final DateTime startTime;
   final DateTime endTime;
   final int maxParticipants;
+  final int? registeredCount;
+  final int? checkedInCount;
   final String? googleSheetId;
   final String? googleSheetName;
   final String? googleSheetUrl;
@@ -18,6 +20,8 @@ class Event {
     required this.startTime,
     required this.endTime,
     required this.maxParticipants,
+    this.registeredCount,
+    this.checkedInCount,
     this.googleSheetId,
     this.googleSheetName,
     this.googleSheetUrl,
@@ -32,9 +36,22 @@ class Event {
       startTime: DateTime.parse(json['start_time'] as String),
       endTime: DateTime.parse(json['end_time'] as String),
       maxParticipants: json['max_participants'] as int? ?? 0,
+      registeredCount: json['registered_count'] as int?,
+      checkedInCount: json['checked_in_count'] as int?,
       googleSheetId: json['google_sheet_id'] as String?,
       googleSheetName: json['google_sheet_name'] as String?,
       googleSheetUrl: json['google_sheet_url'] as String?,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'title': title,
+      'description': description,
+      'location': location,
+      'start_time': startTime.toIso8601String(),
+      'end_time': endTime.toIso8601String(),
+      'max_participants': maxParticipants,
+    };
   }
 }

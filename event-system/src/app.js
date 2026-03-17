@@ -17,6 +17,7 @@ const authRoutes = require('../routes/authRoutes');
 const userRoutes = require('../routes/userRoutes');
 const eventRoutes = require('../routes/eventRoutes');
 const attendanceRoutes = require('../routes/attendanceRoutes');
+const uploadRoutes = require('../routes/upload');
 
 const app = express();
 
@@ -55,6 +56,7 @@ app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/attendance', attendanceRoutes);
+app.use('/api/upload', uploadRoutes);
 
 app.use(errorHandler);
 

@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 
 import 'services/auth_service.dart';
 import 'services/event_service.dart';
+import 'services/organizer_service.dart';
+import 'services/notification_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/event_list_screen.dart';
@@ -12,7 +14,7 @@ import 'screens/my_events_screen.dart';
 import 'screens/qr_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/profile_screen.dart';
-import 'services/notification_service.dart';
+import 'screens/organizer/organizer_shell.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +39,9 @@ class SmartEventAttendanceApp extends StatelessWidget {
         ),
         ChangeNotifierProvider<EventService>(
           create: (_) => EventService(),
+        ),
+        ChangeNotifierProvider<OrganizerService>(
+          create: (_) => OrganizerService(),
         ),
         ChangeNotifierProvider<NotificationService>(
           create: (_) => NotificationService(),
@@ -134,6 +139,7 @@ class SmartEventAttendanceApp extends StatelessWidget {
           QRScreen.routeName: (context) => const QRScreen(),
           NotificationsScreen.routeName: (context) => const NotificationsScreen(),
           ProfileScreen.routeName: (context) => const ProfileScreen(),
+          OrganizerShell.routeName: (context) => const OrganizerShell(),
         },
       ),
     );
@@ -147,16 +153,56 @@ class _AppRouter extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<AuthService>(
       builder: (context, authService, _) {
+        // Đang tải session
         if (authService.currentUser == null && authService.isAuthenticated) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
+        // Chưa đăng nhập
         if (!authService.isAuthenticated) return const LoginScreen();
-        final role = authService.currentUser?.role.toLowerCase();
-        if (role == 'student' || role == '3') return const EventListScreen();
-        return const LoginScreen();
+
+        final role = authService.currentUser?.role.toLowerCase() ?? '';
+
+        // Admin → thông báo dùng web
+        if (role == 'admin') {
+          return Scaffold(
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.admin_panel_settings_rounded, size: 72, color: Color(0xFF6C63FF)),
+                    const SizedBox(height: 24),
+                    const Text('Tài khoản Admin', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Vui lòng sử dụng hệ thống\nWeb Admin để quản lý.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 15, color: Color(0xFF64748B)),
+                    ),
+                    const SizedBox(height: 32),
+                    OutlinedButton.icon(
+                      onPressed: () => authService.logout(),
+                      icon: const Icon(Icons.logout_rounded),
+                      label: const Text('Đăng xuất'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
+        // Organizer → Organizer Shell
+        if (role == 'organizer') return const OrganizerShell();
+
+        // Student (và các role khác) → Student UI
+        return const EventListScreen();
       },
     );
   }
 }
+
+
