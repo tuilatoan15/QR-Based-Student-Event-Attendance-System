@@ -22,4 +22,5 @@ class ApiConfig {
   static String scanQrUrl() => '$baseUrl/api/attendance/scan-qr';
   static String eventAttendanceUrl(int id) =>
       '$baseUrl/api/attendance/event/$id';
+  static String uploadAvatarUrl() => '$baseUrl/api/upload/avatar';
 }

@@ -91,7 +91,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               radius: 50,
                               backgroundColor: const Color(0xFFF1F5F9),
                               backgroundImage: user.avatar != null 
-                                ? NetworkImage('${ApiConfig.baseUrl}${user.avatar}') 
+                                ? NetworkImage(
+                                    user.avatar!.startsWith('http')
+                                      ? user.avatar!
+                                      : '${ApiConfig.baseUrl}${user.avatar}'
+                                  )
                                 : null,
                               child: user.avatar == null 
                                 ? const Icon(Icons.person_rounded, size: 55, color: accent) 

@@ -42,6 +42,8 @@ const markNotificationAsRead = async (req, res, next) => {
   }
 };
 
+const cloudinary = require('../config/cloudinary');
+
 const updateAvatar = async (req, res, next) => {
   try {
     if (!req.file) {
@@ -49,7 +51,17 @@ const updateAvatar = async (req, res, next) => {
     }
 
     const userId = req.user.id;
-    const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+    
+    // Convert buffer to Base64 to upload to Cloudinary
+    const b64 = Buffer.from(req.file.buffer).toString('base64');
+    const dataURI = 'data:' + req.file.mimetype + ';base64,' + b64;
+
+    const result = await cloudinary.uploader.upload(dataURI, {
+      folder: 'avatars',
+      resource_type: 'image'
+    });
+
+    const avatarUrl = result.secure_url;
     const pool = await poolPromise;
 
     await pool.request()
@@ -59,6 +71,7 @@ const updateAvatar = async (req, res, next) => {
 
     return successResponse(res, 200, 'Avatar updated successfully', { avatar: avatarUrl });
   } catch (err) {
+    console.error('Avatar update error:', err);
     next(err);
   }
 };
