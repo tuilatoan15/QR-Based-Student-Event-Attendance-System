@@ -42,7 +42,29 @@ const markNotificationAsRead = async (req, res, next) => {
   }
 };
 
+const updateAvatar = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return errorResponse(res, 400, 'No file uploaded');
+    }
+
+    const userId = req.user.id;
+    const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+    const pool = await poolPromise;
+
+    await pool.request()
+      .input('user_id', sql.Int, userId)
+      .input('avatar', sql.NVarChar(sql.MAX), avatarUrl)
+      .query('UPDATE users SET avatar = @avatar, updated_at = SYSUTCDATETIME() WHERE id = @user_id');
+
+    return successResponse(res, 200, 'Avatar updated successfully', { avatar: avatarUrl });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getUserNotifications,
-  markNotificationAsRead
+  markNotificationAsRead,
+  updateAvatar
 };

@@ -10,14 +10,17 @@ const {
 } = require('../controllers/adminController');
 const {
   getUserNotifications,
-  markNotificationAsRead
+  markNotificationAsRead,
+  updateAvatar
 } = require('../controllers/userController');
+const upload = require('../middlewares/uploadMiddleware');
 
 const router = express.Router();
 
 router.get('/me/events', auth, getUserEvents);
 router.get('/me/notifications', auth, getUserNotifications);
 router.patch('/me/notifications/:id/read', validateId('id'), auth, markNotificationAsRead);
+router.post('/me/avatar', auth, upload.single('avatar'), updateAvatar);
 
 // Admin user management
 router.get('/', auth, authorizeRoles('admin'), listUsersHandler);

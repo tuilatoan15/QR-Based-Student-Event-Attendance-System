@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
 import '../services/auth_service.dart';
 import '../services/event_service.dart';
+import '../config/api_config.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -21,6 +23,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
   }
 
+  Future<void> _changeAvatar() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 512,
+      maxHeight: 512,
+      imageQuality: 75,
+    );
+
+    if (pickedFile != null && mounted) {
+      final success = await context.read<AuthService>().updateAvatar(pickedFile.path);
+      if (mounted) {
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Cập nhật ảnh đại diện thành công')),
+          );
+        } else {
+          final error = context.read<AuthService>().errorMessage ?? 'Lỗi cập nhật ảnh';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(error), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authService = context.watch<AuthService>();
@@ -37,7 +65,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 180,
+            expandedHeight: 200,
             pinned: true,
             backgroundColor: accent,
             flexibleSpace: FlexibleSpaceBar(
@@ -54,14 +82,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const SizedBox(height: 40),
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                        child: const CircleAvatar(
-                          radius: 40,
-                          backgroundColor: Color(0xFFF1F5F9),
-                          child: Icon(Icons.person_rounded, size: 45, color: accent),
-                        ),
+                      Stack(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                            child: CircleAvatar(
+                              radius: 50,
+                              backgroundColor: const Color(0xFFF1F5F9),
+                              backgroundImage: user.avatar != null 
+                                ? NetworkImage('${ApiConfig.baseUrl}${user.avatar}') 
+                                : null,
+                              child: user.avatar == null 
+                                ? const Icon(Icons.person_rounded, size: 55, color: accent) 
+                                : null,
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: InkWell(
+                              onTap: authService.isLoading ? null : _changeAvatar,
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                                child: authService.isLoading 
+                                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                  : Icon(Icons.camera_alt_rounded, size: 20, color: accent),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

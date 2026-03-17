@@ -101,7 +101,7 @@ const listAttendanceHandler = async (req, res, next) => {
       `SELECT 
          a.id AS attendance_id,
          r.id AS registration_id,
-         a.checkin_time AS checkin_time,
+         a.checkin_time AS check_in_time,
          a.checkin_by AS checkin_by,
          r.event_id,
          r.status AS registration_status,
@@ -109,7 +109,8 @@ const listAttendanceHandler = async (req, res, next) => {
          u.full_name AS student_name,
          u.email,
          u.student_code,
-         e.title AS event_title
+         e.title AS event_title,
+         r.registered_at
        FROM registrations r
        JOIN users u ON r.user_id = u.id
        JOIN events e ON r.event_id = e.id

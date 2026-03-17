@@ -127,6 +127,32 @@ class ApiService {
       }
     }
 
-    return http.delete(uri, headers: headers).timeout(const Duration(seconds: 10));
+    return http
+        .delete(uri, headers: headers)
+        .timeout(const Duration(seconds: 10));
+  }
+
+  Future<http.Response> postMultipart(
+    String path, {
+    required String filePath,
+    required String fieldName,
+    bool? authenticated,
+  }) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final request = http.MultipartRequest('POST', uri);
+
+    final needsAuth = authenticated ?? _isProtectedEndpoint(path);
+    if (needsAuth) {
+      final token = await _getToken();
+      if (token != null && token.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+    }
+
+    request.headers['X-Client'] = 'mobile-app';
+    request.files.add(await http.MultipartFile.fromPath(fieldName, filePath));
+
+    final streamedResponse = await request.send();
+    return http.Response.fromStream(streamedResponse);
   }
 }
