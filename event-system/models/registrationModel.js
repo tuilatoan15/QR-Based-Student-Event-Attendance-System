@@ -132,7 +132,7 @@ const getAttendancesForEvent = async (event_id) => {
     .request()
     .input('event_id', sql.Int, event_id)
     .query(
-      `SELECT a.id, a.registration_id, a.checkin_time, a.checkin_by,
+      `SELECT a.id, a.registration_id, a.checkin_time AS check_in_time, a.checkin_by,
               r.user_id, r.event_id, r.qr_token, r.status AS registration_status,
               u.full_name AS student_name, u.email, u.student_code,
               e.title AS event_title
@@ -154,10 +154,10 @@ const insertAttendance = async (registration_id, checkin_by) => {
     .input('checkin_by', sql.Int, checkin_by)
     .query(
       `INSERT INTO attendances (registration_id, checkin_time, checkin_by)
-       OUTPUT INSERTED.checkin_time AS checkin_time
+       OUTPUT INSERTED.checkin_time AS check_in_time
        VALUES (@registration_id, SYSUTCDATETIME(), @checkin_by)`
     );
-  return result.recordset[0].checkin_time;
+  return result.recordset[0].check_in_time;
 };
 
 const hasAttendanceForRegistration = async (registration_id) => {

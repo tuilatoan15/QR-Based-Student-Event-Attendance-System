@@ -80,14 +80,30 @@ const AttendancePage: React.FC = () => {
     setManualResult(null);
     try {
       const res = await attendanceApi.manualCheckinByStudent(code, Number(eid));
-      const msg = res.data?.message || 'Điểm danh thủ công thành công!';
-      const alreadyDone = res.data?.data?.already_checked_in === true;
-      setManualResult({ ok: true, msg: alreadyDone ? '⚠️ ' + msg : '✓ ' + msg });
+      const data = res.data?.data;
+      const alreadyDone = data?.already_checked_in === true;
+      const studentName = data?.student_name || '';
+      const checkinTime = data?.check_in_time;
+      
+      let displayMsg = res.data?.message || (alreadyDone ? 'Sinh viên đã điểm danh trước đó' : 'Điểm danh thành công');
+      
+      if (studentName) {
+        displayMsg = `${studentName} - ${displayMsg}`;
+      }
+      
+      if (checkinTime) {
+        const timeStr = new Date(checkinTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+        displayMsg += ` (${timeStr})`;
+      }
+
+      setManualResult({ ok: true, msg: alreadyDone ? '⚠️ ' + displayMsg : '✓ ' + displayMsg });
+      
       if (!alreadyDone) {
         setManualStudentCode('');
-        notifySuccess(msg);
-        await reload(eventId, search);
+        notifySuccess(displayMsg);
       }
+      // Always reload to show student in list / highlight them
+      await reload(eventId, search);
     } catch (err: any) {
       const m = err?.response?.data?.message || 'Check-in thất bại';
       setManualResult({ ok: false, msg: '✗ ' + m });
@@ -96,13 +112,19 @@ const AttendancePage: React.FC = () => {
 
   const onExportCsv = () => {
     const header = ['Tên sinh viên','Email','Mã SV','Sự kiện','Giờ check-in'];
-    const rows = filtered.map((r) => [r.student_name,r.email,r.student_code??'',r.event_title,r.check_in_time?new Date(r.check_in_time).toLocaleString('vi-VN'):'']);
+    const rows = filtered.map((r) => {
+      const time = r.check_in_time || (r as any).checkin_time || (r as any).checkInTime || (r as any).CHECK_IN_TIME || (r.registration_status === 'attended' ? r.registered_at : null);
+      return [r.student_name, r.email, r.student_code ?? '', r.event_title, time ? new Date(time).toLocaleString('vi-VN') : ''];
+    });
     exportToCsv('attendance-report.csv', header, rows);
   };
 
   const onExportXlsx = () => {
     const header = ['Tên sinh viên','Email','Mã SV','Sự kiện','Giờ check-in'];
-    const rows = filtered.map((r) => [r.student_name,r.email,r.student_code??'',r.event_title,r.check_in_time?new Date(r.check_in_time).toLocaleString('vi-VN'):'']);
+    const rows = filtered.map((r) => {
+      const time = r.check_in_time || (r as any).checkin_time || (r as any).checkInTime || (r as any).CHECK_IN_TIME || (r.registration_status === 'attended' ? r.registered_at : null);
+      return [r.student_name, r.email, r.student_code ?? '', r.event_title, time ? new Date(time).toLocaleString('vi-VN') : ''];
+    });
     exportToXlsx('attendance-report.xlsx', 'Attendance', header, rows);
   };
 
@@ -111,9 +133,27 @@ const AttendancePage: React.FC = () => {
     setProcessingScan(true);
     try {
       const res = await attendanceApi.checkIn(text);
-      const msg = res.data?.message || 'Check-in thành công';
-      setScanResults(prev => [{ at: new Date().toISOString(), ok: true, message: msg }, ...prev].slice(0, 8));
-      notifySuccess(msg);
+      const data = res.data?.data;
+      const alreadyDone = data?.already_checked_in === true;
+      const studentName = data?.student_name || '';
+      const checkinTime = data?.check_in_time;
+      
+      let displayMsg = res.data?.message || (alreadyDone ? 'Đã điểm danh trước đó' : 'Check-in thành công');
+      
+      if (studentName) {
+        displayMsg = `${studentName}: ${displayMsg}`;
+      }
+      
+      if (checkinTime && alreadyDone) {
+        const timeStr = new Date(checkinTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+        displayMsg += ` vào lúc ${timeStr}`;
+      }
+
+      setScanResults(prev => [{ at: new Date().toISOString(), ok: true, message: displayMsg }, ...prev].slice(0, 8));
+      
+      if (!alreadyDone) {
+        notifySuccess(displayMsg);
+      }
       await reload(eventId, search);
     } catch (err: any) {
       const msg = err?.response?.data?.message || 'Check-in thất bại. Kiểm tra lại mã QR.';
@@ -263,7 +303,14 @@ const AttendancePage: React.FC = () => {
                         </td>
                         <td style={{fontSize:13,color:'#334155',maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.event_title}</td>
                         <td style={{fontSize:12.5,color:'#64748b',whiteSpace:'nowrap'}}>
-                          {r.check_in_time ? new Date(r.check_in_time).toLocaleString('vi-VN') : '—'}
+                          {(() => {
+                            const time = r.check_in_time || (r as any).checkin_time || (r as any).checkInTime || (r as any).CHECK_IN_TIME;
+                            if (time) return new Date(time).toLocaleString('vi-VN');
+                            if (r.registration_status === 'attended' && r.registered_at) {
+                              return new Date(r.registered_at).toLocaleString('vi-VN') + ' (*)';
+                            }
+                            return '—';
+                          })()}
                         </td>
                         <td>
                           <span className={`att-badge ${r.registration_status === 'attended' ? 'att-badge-attended' : 'att-badge-reg'}`}>

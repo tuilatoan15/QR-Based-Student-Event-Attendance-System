@@ -161,4 +161,62 @@ class AuthService extends ChangeNotifier {
     await prefs.remove('user_data'); // Clear user data
     notifyListeners();
   }
+
+  Future<bool> updateAvatar(String filePath) async {
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      final response = await _api.postMultipart(
+        '/api/users/me/avatar',
+        filePath: filePath,
+        fieldName: 'avatar',
+      );
+
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200 && decoded['success'] == true) {
+        final newAvatar = decoded['data']['avatar'] as String;
+
+        // Update current user locally
+        if (currentUser != null) {
+          final updatedUser = User(
+            id: currentUser!.id,
+            fullName: currentUser!.fullName,
+            email: currentUser!.email,
+            role: currentUser!.role,
+            studentCode: currentUser!.studentCode,
+            avatar: newAvatar,
+          );
+
+          currentUser = updatedUser;
+
+          // Save updated user to preferences
+          final prefs = await SharedPreferences.getInstance();
+          final userMap = {
+            'id': updatedUser.id,
+            'full_name': updatedUser.fullName,
+            'email': updatedUser.email,
+            'role': updatedUser.role,
+            'student_code': updatedUser.studentCode,
+            'avatar': updatedUser.avatar,
+          };
+          await prefs.setString('user_data', jsonEncode(userMap));
+        }
+
+        isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        errorMessage = decoded['message'] as String? ?? 'Update avatar failed';
+      }
+    } catch (e) {
+      errorMessage = 'Error uploading avatar. Please try again.';
+    }
+
+    isLoading = false;
+    notifyListeners();
+    return false;
+  }
 }

@@ -23,6 +23,7 @@ export type AttendanceListRecord = {
   student_name: string;
   email: string;
   student_code?: string | null;
+  registered_at: string;
 };
 
 export type EventAttendanceStats = {

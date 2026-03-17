@@ -49,21 +49,18 @@ const scanQr = async (req, res, next) => {
     }
 
     // Check if already attended
-    if (registration.status === REGISTRATION_STATUS.ATTENDED) {
-      return successResponse(res, 200, 'Sinh viên này đã điểm danh trước đó', {
-        already_checked_in: true,
-        student_name: registration.full_name,
-        event_title: registration.event_title
-      });
-    }
+    const existingAttendance = await pool.request()
+      .input('reg_id', sql.Int, registration.id)
+      .query('SELECT checkin_time AS check_in_time FROM attendances WHERE registration_id = @reg_id');
 
-    // Check if attendance record already exists for this registration
-    const hasAttendance = await hasAttendanceForRegistration(registration.id);
-    if (hasAttendance) {
+    if (registration.status === REGISTRATION_STATUS.ATTENDED || existingAttendance.recordset.length > 0) {
+      const checkinTime = existingAttendance.recordset[0]?.check_in_time || registration.updated_at; // Fallback to updated_at if somehow missing
       return successResponse(res, 200, 'Sinh viên này đã điểm danh trước đó', {
         already_checked_in: true,
         student_name: registration.full_name,
-        event_title: registration.event_title
+        student_code: registration.student_code,
+        event_title: registration.event_title,
+        check_in_time: checkinTime
       });
     }
 
@@ -86,11 +83,11 @@ const scanQr = async (req, res, next) => {
         .input('checkin_by', sql.Int, req.user.id)
         .query(
           `INSERT INTO attendances (registration_id, checkin_time, checkin_by)
-           OUTPUT INSERTED.checkin_time AS checkin_time
+           OUTPUT INSERTED.checkin_time AS check_in_time
            VALUES (@registration_id, SYSUTCDATETIME(), @checkin_by)`
         );
 
-      const checkin_time = attendanceResult.recordset[0].checkin_time;
+      const check_in_time = attendanceResult.recordset[0].check_in_time;
 
       // Update registration status to attended
       await request
@@ -124,7 +121,7 @@ const scanQr = async (req, res, next) => {
         student_name: registration.full_name,
         event_id: registration.event_id,
         event_title: registration.event_title,
-        check_in_time: checkin_time
+        check_in_time: check_in_time
       });
     } catch (transactionError) {
       await transaction.rollback();
@@ -256,11 +253,18 @@ const manualCheckinByStudent = async (req, res, next) => {
     }
 
     if (reg.status === 'attended') {
-      return successResponse(res, 200, 'Sinh vi\u00ean n\u00e0y \u0111\u00e3 \u0111i\u1ec3m danh tr\u01b0\u1edbc \u0111\u00f3', {
+      const existingAtt = await pool.request()
+        .input('reg_id', sql.Int, reg.registration_id)
+        .query('SELECT checkin_time AS check_in_time FROM attendances WHERE registration_id = @reg_id');
+      
+      const checkinTime = existingAtt.recordset[0]?.check_in_time;
+
+      return successResponse(res, 200, 'Sinh viên này đã điểm danh trước đó', {
         already_checked_in: true,
         student_name: reg.full_name,
         student_code: reg.student_code,
-        event_title: reg.event_title
+        event_title: reg.event_title,
+        check_in_time: checkinTime
       });
     }
 
@@ -273,11 +277,11 @@ const manualCheckinByStudent = async (req, res, next) => {
         .input('checkin_by', sql.Int, req.user.id)
         .query(`
           INSERT INTO attendances (registration_id, checkin_time, checkin_by)
-          OUTPUT INSERTED.checkin_time AS checkin_time
+          OUTPUT INSERTED.checkin_time AS check_in_time
           VALUES (@registration_id, SYSUTCDATETIME(), @checkin_by)
         `);
 
-      const checkin_time = attResult.recordset[0].checkin_time;
+      const check_in_time = attResult.recordset[0].check_in_time;
 
       await request
         .input('reg_id', sql.Int, reg.registration_id)
@@ -297,7 +301,7 @@ const manualCheckinByStudent = async (req, res, next) => {
         student_name: reg.full_name,
         student_code: reg.student_code,
         event_title: reg.event_title,
-        check_in_time: checkin_time
+        check_in_time: check_in_time
       });
     } catch (txErr) {
       await transaction.rollback();

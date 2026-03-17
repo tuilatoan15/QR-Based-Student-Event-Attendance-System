@@ -19,8 +19,22 @@ const QRScannerPage: React.FC = () => {
     setLastResult(null);
     try {
       const res = await attendanceApi.checkIn(data);
-      const message = res.data?.message || 'Check-in thành công!';
-      const isWarning = res.data?.data?.already_checked_in === true;
+      const dataRes = res.data?.data;
+      const isWarning = dataRes?.already_checked_in === true;
+      const studentName = dataRes?.student_name || '';
+      const checkinTime = dataRes?.check_in_time;
+      
+      let message = res.data?.message || (isWarning ? 'Đã điểm danh trước đó' : 'Check-in thành công!');
+      
+      if (studentName) {
+        message = `${studentName}: ${message}`;
+      }
+      
+      if (checkinTime && isWarning) {
+        const timeStr = new Date(checkinTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+        message += ` (${timeStr})`;
+      }
+
       setLastResult({ message, isWarning });
       if (!isWarning) setScanCount(c => c + 1);
     } catch (err: any) {
@@ -111,7 +125,7 @@ const QRScannerPage: React.FC = () => {
               <div className="qr-camera-wrap">
                 <QrReader
                   constraints={{ facingMode: 'environment' }}
-                  onResult={(result, err) => {
+                  onResult={(result) => {
                     if (result) void handleScan(result.getText());
                   }}
                   containerStyle={{ width: '100%' }}
