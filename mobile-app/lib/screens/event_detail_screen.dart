@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/event.dart';
 import '../models/registration.dart';
 import '../services/event_service.dart';
+import '../services/auth_service.dart';
 import '../widgets/primary_button.dart';
 import 'qr_screen.dart';
 
@@ -116,7 +117,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   leading: Padding(
                     padding: const EdgeInsets.all(8),
                     child: GestureDetector(
-                      onTap: () => Navigator.pop(context),
+                      onTap: () { if (Navigator.canPop(context)) Navigator.pop(context); },
                       child: Container(
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.2),
@@ -273,46 +274,48 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         const SizedBox(height: 24),
 
                         // Actions
-                        if (_registration == null)
-                          PrimaryButton(
-                            label: 'Đăng ký tham dự',
-                            isLoading: svc.isLoading,
-                            onPressed: _register,
-                          )
-                        else
-                          Column(
-                            children: [
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton.icon(
-                                  onPressed: svc.isLoading ? null : _showQR,
-                                  icon: const Icon(Icons.qr_code_2_rounded),
-                                  label: const Text('Hiển thị mã QR'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: _accent,
-                                    padding: const EdgeInsets.symmetric(vertical: 15),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        if (context.read<AuthService>().currentUser?.role == 'student') ...[
+                          if (_registration == null)
+                            PrimaryButton(
+                              label: 'Đăng ký tham dự',
+                              isLoading: svc.isLoading,
+                              onPressed: _register,
+                            )
+                          else
+                            Column(
+                              children: [
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    onPressed: svc.isLoading ? null : _showQR,
+                                    icon: const Icon(Icons.qr_code_2_rounded),
+                                    label: const Text('Hiển thị mã QR'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: _accent,
+                                      padding: const EdgeInsets.symmetric(vertical: 15),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(height: 10),
-                              SizedBox(
-                                width: double.infinity,
-                                child: OutlinedButton.icon(
-                                  onPressed: svc.isLoading ? null : _cancel,
-                                  icon: const Icon(Icons.close_rounded, size: 18),
-                                  label: const Text('Huỷ đăng ký'),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: const Color(0xFFEF4444),
-                                    side: const BorderSide(color: Color(0xFFFECACA)),
-                                    padding: const EdgeInsets.symmetric(vertical: 14),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                const SizedBox(height: 10),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    onPressed: svc.isLoading ? null : _cancel,
+                                    icon: const Icon(Icons.close_rounded, size: 18),
+                                    label: const Text('Huỷ đăng ký'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: const Color(0xFFEF4444),
+                                      side: const BorderSide(color: Color(0xFFFECACA)),
+                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        const SizedBox(height: 32),
+                              ],
+                            ),
+                          const SizedBox(height: 32),
+                        ],
                       ],
                     ),
                   ),

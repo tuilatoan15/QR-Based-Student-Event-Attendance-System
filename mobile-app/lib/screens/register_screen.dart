@@ -50,7 +50,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!mounted) return;
     if (success) {
       auth.errorMessage = null;
-      Navigator.of(context).pushReplacementNamed(EventListScreen.routeName);
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
     } else {
       setState(() {});
     }
@@ -72,7 +72,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             child: const Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: Color(0xFF0F172A)),
           ),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () { if (Navigator.canPop(context)) Navigator.pop(context); },
         ),
         title: const Text('Tạo tài khoản'),
       ),
@@ -230,7 +230,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       children: [
                         const Text('Đã có tài khoản?', style: TextStyle(color: Color(0xFF64748B), fontSize: 13.5)),
                         TextButton(
-                          onPressed: () => Navigator.pop(context),
+                          onPressed: () { if (Navigator.canPop(context)) Navigator.pop(context); },
                           style: TextButton.styleFrom(foregroundColor: const Color(0xFF2563EB), padding: const EdgeInsets.symmetric(horizontal: 8)),
                           child: const Text('Đăng nhập', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
                         ),

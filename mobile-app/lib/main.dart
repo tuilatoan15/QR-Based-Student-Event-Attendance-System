@@ -15,6 +15,7 @@ import 'screens/qr_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/organizer/organizer_shell.dart';
+import 'services/theme_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,8 +47,13 @@ class SmartEventAttendanceApp extends StatelessWidget {
         ChangeNotifierProvider<NotificationService>(
           create: (_) => NotificationService(),
         ),
+        ChangeNotifierProvider<ThemeProvider>(
+          create: (_) => ThemeProvider(),
+        ),
       ],
-      child: MaterialApp(
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, child) {
+          return MaterialApp(
         title: 'EventPass',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
@@ -129,6 +135,67 @@ class SmartEventAttendanceApp extends StatelessWidget {
             contentTextStyle: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500),
           ),
         ),
+        themeMode: themeProvider.themeMode,
+        darkTheme: ThemeData(
+          useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF00CCFF),
+            brightness: Brightness.dark,
+          ).copyWith(
+            primary: const Color(0xFF00CCFF),
+            secondary: const Color(0xFF00B4D8),
+            surface: const Color(0xFF0F172A),
+            error: const Color(0xFFEF4444),
+          ),
+          fontFamily: 'Roboto',
+          scaffoldBackgroundColor: const Color(0xFF1E293B),
+          appBarTheme: const AppBarTheme(
+            backgroundColor: Color(0xFF1E293B),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            titleTextStyle: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: -0.3),
+            iconTheme: IconThemeData(color: Color(0xFF00CCFF)),
+          ),
+          cardTheme: CardTheme(
+            elevation: 0,
+            color: const Color(0xFF334155),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            margin: EdgeInsets.zero,
+          ),
+          inputDecorationTheme: InputDecorationTheme(
+            filled: true,
+            fillColor: const Color(0xFF0F172A),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF475569), width: 1.5)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF475569), width: 1.5)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF00CCFF), width: 2)),
+            errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.5)),
+            labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+            hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
+          ),
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00CCFF),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.2),
+            ),
+          ),
+          snackBarTheme: SnackBarThemeData(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: const Color(0xFF334155),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            contentTextStyle: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: Colors.white),
+          ),
+          bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+            backgroundColor: Color(0xFF1E293B),
+            selectedItemColor: Color(0xFF00CCFF),
+            unselectedItemColor: Color(0xFF64748B),
+          ),
+        ),
         home: const _AppRouter(),
         routes: {
           LoginScreen.routeName: (context) => const LoginScreen(),
@@ -141,7 +208,9 @@ class SmartEventAttendanceApp extends StatelessWidget {
           ProfileScreen.routeName: (context) => const ProfileScreen(),
           OrganizerShell.routeName: (context) => const OrganizerShell(),
         },
-      ),
+      );
+    },
+    ),
     );
   }
 }
@@ -165,7 +234,7 @@ class _AppRouter extends StatelessWidget {
         final role = authService.currentUser?.role.toLowerCase() ?? '';
 
         // Admin → thông báo dùng web
-        if (role == 'admin') {
+        if (role == 'admin' || role.contains('admin')) {
           return Scaffold(
             body: Center(
               child: Padding(
@@ -196,7 +265,9 @@ class _AppRouter extends StatelessWidget {
         }
 
         // Organizer → Organizer Shell
-        if (role == 'organizer') return const OrganizerShell();
+        if (role == 'organizer' || role == '2' || role.contains('organizer')) {
+          return const OrganizerShell();
+        }
 
         // Student (và các role khác) → Student UI
         return const EventListScreen();

@@ -20,9 +20,16 @@ class User {
       id: json['id'] as int,
       fullName: json['full_name'] as String? ?? '',
       email: json['email'] as String? ?? '',
-      role: (json['role_name'] ?? json['role'] ?? '').toString(),
+      role: _normalizeRole((json['role_name'] ?? json['role'] ?? '').toString()),
       studentCode: json['student_code'] as String?,
       avatar: json['avatar'] as String?,
     );
+  }
+
+  static String _normalizeRole(String rawRole) {
+    final lower = rawRole.toLowerCase();
+    if (lower == '2' || lower.contains('organizer')) return 'organizer';
+    if (lower == '1' || lower.contains('admin')) return 'admin';
+    return lower;
   }
 }

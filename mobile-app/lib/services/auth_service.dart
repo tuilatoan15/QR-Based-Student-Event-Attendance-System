@@ -30,8 +30,8 @@ class AuthService extends ChangeNotifier {
         final userData = jsonDecode(userJson) as Map<String, dynamic>;
         final loadedUser = User.fromJson(userData);
         final role = loadedUser.role.toLowerCase();
-        // Only keep session for student users
-        if (role == 'student' || role == '3') {
+        // Keep session for student and organizer users
+        if (role == 'student' || role == '3' || role == 'organizer') {
           currentUser = loadedUser;
         } else {
           await prefs.remove('auth_token');
@@ -77,6 +77,9 @@ class AuthService extends ChangeNotifier {
 
         _token = data['token'] as String?;
           currentUser = user;
+
+          // Debug: log the role received from backend
+          debugPrint('[AuthService] Login success. Role from backend: "${user.role}" (lower: "${user.role.toLowerCase()}")');
 
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('auth_token', _token ?? '');

@@ -6,7 +6,7 @@ const authorizeRoles = (...allowedRoles) => {
       return errorResponse(res, 401, 'Unauthorized');
     }
     if (!allowedRoles.includes(req.user.role)) {
-      return errorResponse(res, 403, 'Forbidden: insufficient permissions');
+      return errorResponse(res, 403, 'Không đủ quyền truy cập để thực hiện thao tác này');
     }
     next();
   };
