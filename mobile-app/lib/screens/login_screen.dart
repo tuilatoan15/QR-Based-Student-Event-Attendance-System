@@ -41,7 +41,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     if (success) {
       auth.errorMessage = null;
-      Navigator.of(context).pushReplacementNamed(EventListScreen.routeName);
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
     } else {
       setState(() {});
     }

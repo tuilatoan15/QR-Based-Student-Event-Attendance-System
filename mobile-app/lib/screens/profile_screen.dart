@@ -4,6 +4,8 @@ import 'package:image_picker/image_picker.dart';
 import '../services/auth_service.dart';
 import '../services/event_service.dart';
 import '../config/api_config.dart';
+import 'help_center_screen.dart';
+import 'settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -148,12 +150,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       _ProfileItem(
                         icon: Icons.settings_outlined,
                         label: 'Cài đặt tài khoản',
-                        onTap: () {},
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
                       ),
                       _ProfileItem(
                         icon: Icons.help_outline_rounded,
                         label: 'Trung tâm trợ giúp',
-                        onTap: () {},
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpCenterScreen())),
                       ),
                     ],
                   ),

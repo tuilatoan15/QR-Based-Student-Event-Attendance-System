@@ -56,7 +56,7 @@ class QRScreen extends StatelessWidget {
             leading: Padding(
               padding: const EdgeInsets.all(8),
               child: GestureDetector(
-                onTap: () => Navigator.pop(context),
+                onTap: () { if (Navigator.canPop(context)) Navigator.pop(context); },
                 child: Container(
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.2),
@@ -270,7 +270,7 @@ class QRScreen extends StatelessWidget {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: () { if (Navigator.canPop(context)) Navigator.pop(context); },
                       icon: const Icon(Icons.arrow_back_rounded, size: 18),
                       label: const Text('Quay lại'),
                       style: OutlinedButton.styleFrom(

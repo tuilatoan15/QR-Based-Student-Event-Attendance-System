@@ -93,7 +93,7 @@ class _MyEventsScreenState extends State<MyEventsScreen> {
               leading: Padding(
                 padding: const EdgeInsets.all(8),
                 child: GestureDetector(
-                  onTap: () => Navigator.pop(context),
+                  onTap: () { if (Navigator.canPop(context)) Navigator.pop(context); },
                   child: Container(
                     decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
                     child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 16),

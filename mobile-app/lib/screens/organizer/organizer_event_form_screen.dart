@@ -89,7 +89,7 @@ class _OrganizerEventFormScreenState extends State<OrganizerEventFormScreen> {
 
     if (mounted) {
       if (success) {
-        Navigator.pop(context);
+        if (Navigator.canPop(context)) Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(_isEditing ? 'Đã cập nhật sự kiện' : 'Đã tạo sự kiện thành công'),
           backgroundColor: Colors.green,

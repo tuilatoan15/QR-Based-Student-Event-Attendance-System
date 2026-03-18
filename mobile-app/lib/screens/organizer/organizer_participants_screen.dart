@@ -39,6 +39,12 @@ class _OrganizerParticipantsScreenState extends State<OrganizerParticipantsScree
       return q.isEmpty || p.fullName.toLowerCase().contains(q) || (p.email.toLowerCase().contains(q)) || (p.studentCode ?? '').toLowerCase().contains(q);
     }).toList();
 
+    // Prevent DropdownButton assertion error if the selected event is no longer in the list
+    Event? safeSelectedEvent = _selectedEvent;
+    if (safeSelectedEvent != null && !service.myEvents.contains(safeSelectedEvent)) {
+      safeSelectedEvent = null;
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5FF),
       appBar: AppBar(
@@ -53,7 +59,7 @@ class _OrganizerParticipantsScreenState extends State<OrganizerParticipantsScree
             color: Colors.white,
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             child: DropdownButtonFormField<Event>(
-              value: _selectedEvent,
+              value: safeSelectedEvent,
               isExpanded: true,
               hint: const Text('Chọn sự kiện...', style: TextStyle(color: Color(0xFF9E9E9E))),
               decoration: InputDecoration(
@@ -72,7 +78,7 @@ class _OrganizerParticipantsScreenState extends State<OrganizerParticipantsScree
           ),
 
           // ─── Search Bar ────────────────────
-          if (_selectedEvent != null)
+          if (safeSelectedEvent != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               child: TextField(
@@ -94,7 +100,7 @@ class _OrganizerParticipantsScreenState extends State<OrganizerParticipantsScree
           const SizedBox(height: 8),
 
           // ─── Stats ────────────────────────
-          if (_selectedEvent != null && !service.isLoading)
+          if (safeSelectedEvent != null && !service.isLoading)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
@@ -112,12 +118,12 @@ class _OrganizerParticipantsScreenState extends State<OrganizerParticipantsScree
 
           // ─── List ──────────────────────────
           Expanded(
-            child: _selectedEvent == null
+            child: safeSelectedEvent == null
                 ? const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.touch_app_outlined, size: 56, color: Color(0xFFCFCFCF)), SizedBox(height: 12), Text('Chọn sự kiện để xem danh sách', style: TextStyle(color: Color(0xFF9E9E9E)))]))
                 : service.isLoading
                     ? const Center(child: CircularProgressIndicator())
                     : RefreshIndicator(
-                        onRefresh: () => service.fetchParticipants(_selectedEvent!.id),
+                        onRefresh: () => service.fetchParticipants(safeSelectedEvent!.id),
                         child: filtered.isEmpty
                             ? const Center(child: Text('Không tìm thấy ai', style: TextStyle(color: Color(0xFF9E9E9E))))
                             : ListView.separated(
