@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/string_utils.dart';
 import 'package:provider/provider.dart';
 
 import '../services/auth_service.dart';
@@ -129,8 +130,9 @@ class _EventListBodyState extends State<_EventListBody> {
 
     final events = eventService.events.where((e) {
       if (_query.isEmpty) return true;
-      return e.title.toLowerCase().contains(_query.toLowerCase()) ||
-          e.location.toLowerCase().contains(_query.toLowerCase());
+      final q = removeDiacritics(_query).toLowerCase();
+      return removeDiacritics(e.title).toLowerCase().contains(q) ||
+          removeDiacritics(e.location).toLowerCase().contains(q);
     }).toList();
 
     final now = DateTime.now();

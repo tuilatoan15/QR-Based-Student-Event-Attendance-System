@@ -5,6 +5,7 @@ import { eventApi, type Event } from '../api/eventApi';
 import { exportToCsv, exportToXlsx } from '../utils/exporters';
 import { notifySuccess } from '../utils/notify';
 import { useAuth } from '../context/AuthContext';
+import { removeDiacritics } from '../utils/stringUtils';
 
 type ScanResult = { at: string; ok: boolean; message: string; };
 
@@ -59,14 +60,14 @@ const AttendancePage: React.FC = () => {
   }, [eventId]);
 
   const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
+    const term = removeDiacritics(search.trim().toLowerCase());
     return records.filter((r) => {
       if (!term) return true;
       return (
-        (r.student_name ?? '').toLowerCase().includes(term) ||
-        (r.email ?? '').toLowerCase().includes(term) ||
-        (r.student_code ?? '').toLowerCase().includes(term) ||
-        (r.event_title ?? '').toLowerCase().includes(term)
+        removeDiacritics((r.student_name ?? '').toLowerCase()).includes(term) ||
+        removeDiacritics((r.email ?? '').toLowerCase()).includes(term) ||
+        removeDiacritics((r.student_code ?? '').toLowerCase()).includes(term) ||
+        removeDiacritics((r.event_title ?? '').toLowerCase()).includes(term)
       );
     });
   }, [records, search]);

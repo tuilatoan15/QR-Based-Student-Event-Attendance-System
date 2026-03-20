@@ -13,11 +13,14 @@ import AttendanceHistoryPage from './pages/AttendanceHistoryPage';
 import EventDetailPage from './pages/EventDetailPage';
 import AttendancePage from './pages/AttendancePage';
 import UsersPage from './pages/UsersPage';
+import RegisterOrganizerPage from './pages/RegisterOrganizerPage';
+import OrganizerApprovalPage from './pages/OrganizerApprovalPage';
 
 const App: React.FC = () => {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register-organizer" element={<RegisterOrganizerPage />} />
 
       <Route
         path="/"
@@ -43,6 +46,7 @@ const App: React.FC = () => {
           element={<AttendanceHistoryPage />}
         />
         <Route path="users" element={<UsersPage />} />
+        <Route path="organizers" element={<OrganizerApprovalPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

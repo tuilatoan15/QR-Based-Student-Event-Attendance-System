@@ -18,6 +18,7 @@ const userRoutes = require('../routes/userRoutes');
 const eventRoutes = require('../routes/eventRoutes');
 const attendanceRoutes = require('../routes/attendanceRoutes');
 const uploadRoutes = require('../routes/upload');
+const adminRoutes = require('../routes/adminRoutes');
 
 const app = express();
 
@@ -57,6 +58,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.use(errorHandler);
 

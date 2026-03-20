@@ -64,10 +64,10 @@ const listUsers = async ({ offset = 0, limit = 50, search = '' } = {}) => {
     .input('offset', sql.Int, offset)
     .input('limit', sql.Int, limit);
 
-  let whereSql = '';
+  let whereSql = 'WHERE (oi.approval_status IS NULL OR oi.approval_status = \'approved\')';
   if (term) {
     request.input('search', sql.NVarChar(255), `%${term}%`);
-    whereSql = 'WHERE (u.full_name LIKE @search OR u.email LIKE @search OR u.student_code LIKE @search)';
+    whereSql += ' AND (u.full_name LIKE @search OR u.email LIKE @search OR u.student_code LIKE @search)';
   }
 
   const result = await request.query(
@@ -75,6 +75,7 @@ const listUsers = async ({ offset = 0, limit = 50, search = '' } = {}) => {
             r.name AS role_name
      FROM users u
      JOIN roles r ON u.role_id = r.id
+     LEFT JOIN organizer_info oi ON u.id = oi.user_id
      ${whereSql}
      ORDER BY u.created_at DESC
      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`
@@ -86,15 +87,16 @@ const countUsers = async ({ search = '' } = {}) => {
   const pool = await poolPromise;
   const term = (search || '').trim();
   const request = pool.request();
-  let whereSql = '';
+  let whereSql = 'WHERE (oi.approval_status IS NULL OR oi.approval_status = \'approved\')';
   if (term) {
     request.input('search', sql.NVarChar(255), `%${term}%`);
-    whereSql = 'WHERE (full_name LIKE @search OR email LIKE @search OR student_code LIKE @search)';
+    whereSql += ' AND (u.full_name LIKE @search OR u.email LIKE @search OR u.student_code LIKE @search)';
   }
 
   const result = await request.query(
     `SELECT COUNT(1) AS total
-     FROM users
+     FROM users u
+     LEFT JOIN organizer_info oi ON u.id = oi.user_id
      ${whereSql}`
   );
   return result.recordset[0]?.total ?? 0;
@@ -122,6 +124,41 @@ const setUserActive = async (userId, isActive) => {
     .query('UPDATE users SET is_active = @is_active, updated_at = SYSUTCDATETIME() WHERE id = @id');
 };
 
+const updateUserPassword = async (userId, newPasswordHash) => {
+  const pool = await poolPromise;
+  await pool
+    .request()
+    .input('id', sql.Int, userId)
+    .input('password_hash', sql.NVarChar(255), newPasswordHash)
+    .query('UPDATE users SET password_hash = @password_hash, updated_at = SYSUTCDATETIME() WHERE id = @id');
+  return true;
+};
+
+const getOrganizerInfoByUserId = async (userId) => {
+  const pool = await poolPromise;
+  const result = await pool
+    .request()
+    .input('user_id', sql.Int, userId)
+    .query('SELECT * FROM organizer_info WHERE user_id = @user_id');
+  return result.recordset[0] || null;
+};
+
+const createOrganizerInfo = async ({ user_id, organization_name, position, phone, bio, website }) => {
+  const pool = await poolPromise;
+  await pool
+    .request()
+    .input('user_id', sql.Int, user_id)
+    .input('organization_name', sql.NVarChar(255), organization_name)
+    .input('position', sql.NVarChar(255), position || null)
+    .input('phone', sql.VarChar(20), phone || null)
+    .input('bio', sql.NVarChar(sql.MAX), bio || null)
+    .input('website', sql.NVarChar(255), website || null)
+    .query(`
+      INSERT INTO organizer_info (user_id, organization_name, position, phone, bio, website, approval_status)
+      VALUES (@user_id, @organization_name, @position, @phone, @bio, @website, 'pending')
+    `);
+};
+
 module.exports = {
   createUser,
   findUserByEmail,
@@ -130,5 +167,8 @@ module.exports = {
   listUsers,
   countUsers,
   setUserRoleByName,
-  setUserActive
+  setUserActive,
+  updateUserPassword,
+  getOrganizerInfoByUserId,
+  createOrganizerInfo
 };

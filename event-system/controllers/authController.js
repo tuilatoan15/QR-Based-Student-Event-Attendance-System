@@ -1,7 +1,7 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
-const { createUser, findUserByEmail, getRoleIdByName } = require('../models/userModel');
+const { createUser, findUserByEmail, getRoleIdByName, getOrganizerInfoByUserId, createOrganizerInfo } = require('../models/userModel');
 const { successResponse, errorResponse } = require('../utils/response');
 const { logAuthAttempt } = require('../utils/logger');
 
@@ -63,6 +63,52 @@ const register = async (req, res, next) => {
   }
 };
 
+const registerOrganizer = async (req, res, next) => {
+  try {
+    const { full_name, email, password, organization_name, position, phone, bio, website } = req.body;
+
+    if (!full_name || !email || !password || !organization_name) {
+      return errorResponse(res, 400, 'full_name, email, password, and organization_name are required');
+    }
+
+    const existing = await findUserByEmail(email);
+    if (existing) {
+      const orgInfo = await getOrganizerInfoByUserId(existing.id);
+      if (orgInfo) {
+        return errorResponse(res, 409, 'User is already registered as an organizer');
+      }
+      return errorResponse(res, 409, 'Email already registered');
+    }
+
+    const roleId = await getRoleIdByName('student');
+    if (!roleId) {
+      return errorResponse(res, 500, 'Default student role not configured');
+    }
+
+    const password_hash = await bcrypt.hash(password, SALT_ROUNDS);
+    const newUser = await createUser({
+      full_name,
+      email,
+      password_hash,
+      role_id: roleId,
+      student_code: null
+    });
+
+    await createOrganizerInfo({
+      user_id: newUser.id,
+      organization_name,
+      position,
+      phone,
+      bio,
+      website
+    });
+
+    return successResponse(res, 201, 'Đăng ký thành công, vui lòng chờ admin duyệt tài khoản');
+  } catch (err) {
+    next(err);
+  }
+};
+
 const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
@@ -87,6 +133,18 @@ const login = async (req, res, next) => {
     if (!match) {
       logAuthAttempt(email, false);
       return errorResponse(res, 401, 'Invalid credentials');
+    }
+
+    const orgInfo = await getOrganizerInfoByUserId(user.id);
+    if (orgInfo) {
+      if (orgInfo.approval_status === 'pending') {
+        logAuthAttempt(email, false);
+        return errorResponse(res, 403, 'Tài khoản của bạn chưa được Admin phê duyệt');
+      }
+      if (orgInfo.approval_status === 'rejected') {
+        logAuthAttempt(email, false);
+        return errorResponse(res, 403, `Tài khoản đã bị từ chối: ${orgInfo.reject_reason || ''}`);
+      }
     }
 
     // Mobile app: block admin role only, allow organizer
@@ -122,5 +180,6 @@ const login = async (req, res, next) => {
 
 module.exports = {
   register,
+  registerOrganizer,
   login
 };

@@ -76,8 +76,119 @@ const updateAvatar = async (req, res, next) => {
   }
 };
 
+const bcrypt = require('bcrypt');
+const { findUserById, updateUserPassword } = require('../models/userModel');
+
+const changePassword = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { old_password, new_password } = req.body;
+
+    if (!old_password || !new_password) {
+      return errorResponse(res, 400, 'Mật khẩu cũ và mới là bắt buộc (old_password, new_password)');
+    }
+
+    if (new_password.length < 6) {
+      return errorResponse(res, 400, 'Mật khẩu mới phải từ 6 ký tự trở lên');
+    }
+
+    const user = await findUserById(userId);
+    if (!user) {
+      return errorResponse(res, 404, 'Không tìm thấy người dùng');
+    }
+
+    const match = await bcrypt.compare(old_password, user.password_hash);
+    if (!match) {
+      return errorResponse(res, 400, 'Mật khẩu cũ không chính xác');
+    }
+
+    const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS || '10', 10);
+    const newPasswordHash = await bcrypt.hash(new_password, SALT_ROUNDS);
+
+    await updateUserPassword(userId, newPasswordHash);
+
+    return successResponse(res, 200, 'Đổi mật khẩu thành công');
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getOrganizerProfile = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .input('user_id', sql.Int, userId)
+      .query(`
+        SELECT u.id, u.full_name, u.email, u.avatar,
+               o.organization_name, o.position, o.phone, o.bio, o.website,
+               o.approval_status
+        FROM users u
+        LEFT JOIN organizer_info o ON u.id = o.user_id
+        WHERE u.id = @user_id
+      `);
+      
+    if (!result.recordset[0]) {
+      return errorResponse(res, 404, 'User not found');
+    }
+    
+    return successResponse(res, 200, 'Organizer profile retrieved successfully', result.recordset[0]);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const updateOrganizerProfile = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { full_name, organization_name, position, phone, bio, website } = req.body;
+    
+    const pool = await poolPromise;
+    
+    if (full_name) {
+      await pool.request()
+        .input('user_id', sql.Int, userId)
+        .input('full_name', sql.NVarChar(255), full_name)
+        .query('UPDATE users SET full_name = @full_name, updated_at = SYSUTCDATETIME() WHERE id = @user_id');
+    }
+
+    if (organization_name !== undefined || position !== undefined || phone !== undefined || bio !== undefined || website !== undefined) {
+      const request = pool.request().input('user_id', sql.Int, userId);
+      const updates = [];
+      if (organization_name !== undefined) { updates.push('organization_name = @org_name'); request.input('org_name', sql.NVarChar(255), organization_name); }
+      if (position !== undefined) { updates.push('position = @pos'); request.input('pos', sql.NVarChar(255), position); }
+      if (phone !== undefined) { updates.push('phone = @phone'); request.input('phone', sql.VarChar(20), phone); }
+      if (bio !== undefined) { updates.push('bio = @bio'); request.input('bio', sql.NVarChar(sql.MAX), bio); }
+      if (website !== undefined) { updates.push('website = @web'); request.input('web', sql.NVarChar(255), website); }
+      
+      if (updates.length > 0) {
+        updates.push('updated_at = GETDATE()');
+        await request.query(`UPDATE organizer_info SET ${updates.join(', ')} WHERE user_id = @user_id`);
+      }
+    }
+    
+    const result = await pool.request()
+      .input('user_id', sql.Int, userId)
+      .query(`
+        SELECT u.id, u.full_name, u.email, u.avatar,
+               o.organization_name, o.position, o.phone, o.bio, o.website,
+               o.approval_status
+        FROM users u
+        LEFT JOIN organizer_info o ON u.id = o.user_id
+        WHERE u.id = @user_id
+      `);
+
+    return successResponse(res, 200, 'Cập nhật thành công', result.recordset[0]);
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getUserNotifications,
   markNotificationAsRead,
-  updateAvatar
+  updateAvatar,
+  changePassword,
+  getOrganizerProfile,
+  updateOrganizerProfile
 };

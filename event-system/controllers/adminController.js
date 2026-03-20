@@ -68,6 +68,89 @@ const deactivateUserHandler = async (req, res, next) => {
 // NOTE: Registration status is controlled by student actions + QR attendance only.
 // No manual registration status mutation endpoint is exposed via admin API.
 
+const getPendingOrganizersHandler = async (req, res, next) => {
+  try {
+    const status = req.query.status || 'pending';
+    const pool = await poolPromise;
+    const result = await pool
+      .request()
+      .input('status', sql.VarChar(20), status)
+      .query(`
+        SELECT o.user_id, u.full_name, u.email, u.avatar,
+               o.organization_name, o.position, o.phone, o.bio, o.website,
+               o.approval_status, o.created_at, o.reject_reason
+        FROM organizer_info o
+        JOIN users u ON o.user_id = u.id
+        WHERE o.approval_status = @status
+        ORDER BY o.created_at DESC
+      `);
+    return successResponse(res, 200, 'Organizers retrieved successfully', result.recordset);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const approveOrganizerHandler = async (req, res, next) => {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    if (!userId || !Number.isInteger(userId)) return errorResponse(res, 400, 'Invalid user id');
+
+    const pool = await poolPromise;
+    
+    // update organizer_info
+    const result = await pool.request()
+      .input('user_id', sql.Int, userId)
+      .input('admin_id', sql.Int, req.user.id)
+      .query(`
+        UPDATE organizer_info 
+        SET approval_status = 'approved', approved_by = @admin_id, approved_at = GETDATE(), updated_at = GETDATE()
+        WHERE user_id = @user_id
+        AND (approval_status = 'pending' OR approval_status = 'rejected')
+      `);
+      
+    if (result.rowsAffected[0] === 0) {
+      return errorResponse(res, 404, 'Organizer info not found or not in valid state');
+    }
+      
+    // update users role to 2 (organizer)
+    await setUserRoleByName(userId, 'organizer');
+    
+    return successResponse(res, 200, 'Đã duyệt tài khoản organizer');
+  } catch (err) {
+    next(err);
+  }
+};
+
+const rejectOrganizerHandler = async (req, res, next) => {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    const { reason } = req.body || {};
+    if (!userId || !Number.isInteger(userId)) return errorResponse(res, 400, 'Invalid user id');
+    if (!reason || typeof reason !== 'string') return errorResponse(res, 400, 'reason is required');
+
+    const pool = await poolPromise;
+    
+    const result = await pool.request()
+      .input('user_id', sql.Int, userId)
+      .input('admin_id', sql.Int, req.user.id)
+      .input('reason', sql.NVarChar(255), reason)
+      .query(`
+        UPDATE organizer_info 
+        SET approval_status = 'rejected', approved_by = @admin_id, approved_at = GETDATE(), reject_reason = @reason, updated_at = GETDATE()
+        WHERE user_id = @user_id
+        AND approval_status = 'pending'
+      `);
+      
+    if (result.rowsAffected[0] === 0) {
+      return errorResponse(res, 404, 'Organizer info not found or not in valid state');
+    }
+      
+    return successResponse(res, 200, 'Đã từ chối tài khoản organizer');
+  } catch (err) {
+    next(err);
+  }
+};
+
 const listAttendanceHandler = async (req, res, next) => {
   try {
     const eventId = req.query.event_id ? parseInt(req.query.event_id, 10) : null;
@@ -132,6 +215,9 @@ module.exports = {
   listUsersHandler,
   updateUserRoleHandler,
   deactivateUserHandler,
-  listAttendanceHandler
+  listAttendanceHandler,
+  getPendingOrganizersHandler,
+  approveOrganizerHandler,
+  rejectOrganizerHandler
 };
 

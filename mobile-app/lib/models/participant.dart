@@ -25,7 +25,7 @@ class Participant {
       studentCode: json['student_code'] as String?,
       status: (json['status'] ?? 'registered') as String,
       checkInTime: json['check_in_time'] != null
-          ? DateTime.tryParse(json['check_in_time'] as String)
+          ? DateTime.tryParse(json['check_in_time'].toString().endsWith('Z') ? json['check_in_time'] : '${json['check_in_time']}Z')?.toLocal()
           : null,
     );
   }

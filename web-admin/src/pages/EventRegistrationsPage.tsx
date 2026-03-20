@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { eventApi } from '../api/eventApi';
 import { exportToCsv, exportToXlsx } from '../utils/exporters';
+import { removeDiacritics } from '../utils/stringUtils';
 
 type Registration = {
   id: number;
@@ -51,11 +52,11 @@ const EventRegistrationsPage: React.FC = () => {
   }, [id]);
 
   const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
+    const term = removeDiacritics(search.trim().toLowerCase());
     return registrations.filter(reg => {
       if (statusFilter !== 'all' && filterKey(reg.registration_status) !== statusFilter) return false;
       if (!term) return true;
-      return (reg.student_name ?? '').toLowerCase().includes(term) || (reg.email ?? '').toLowerCase().includes(term) || (reg.student_code ?? '').toLowerCase().includes(term);
+      return removeDiacritics((reg.student_name ?? '').toLowerCase()).includes(term) || removeDiacritics((reg.email ?? '').toLowerCase()).includes(term) || removeDiacritics((reg.student_code ?? '').toLowerCase()).includes(term);
     });
   }, [registrations, search, statusFilter]);
 

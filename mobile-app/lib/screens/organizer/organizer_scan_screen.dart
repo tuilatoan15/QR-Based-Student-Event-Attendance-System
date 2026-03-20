@@ -66,7 +66,7 @@ class _OrganizerScanScreenState extends State<OrganizerScanScreen> {
       String msg = result?['message'] as String? ?? (ok ? 'Check-in thành công!' : 'Check-in thất bại');
       if (studentName.isNotEmpty) msg = '$studentName – $msg';
       if (checkinTime != null && alreadyDone) {
-        final t = DateTime.tryParse(checkinTime);
+        final t = DateTime.tryParse(checkinTime.endsWith('Z') ? checkinTime : '${checkinTime}Z')?.toLocal();
         if (t != null) {
           final h = t.hour.toString().padLeft(2, '0');
           final m = t.minute.toString().padLeft(2, '0');
