@@ -7,6 +7,7 @@ export type AdminUser = {
   student_code?: string | null;
   is_active: boolean;
   role_name: string;
+  avatar?: string | null;
   created_at?: string;
   updated_at?: string;
 };

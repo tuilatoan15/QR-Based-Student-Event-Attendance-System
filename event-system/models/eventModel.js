@@ -45,7 +45,11 @@ const getAllEvents = async (offset = 0, limit = 10) => {
        LEFT JOIN event_categories c ON e.category_id = c.id
        WHERE e.is_active = 1
        ORDER BY 
-         CASE WHEN e.end_time >= SYSUTCDATETIME() THEN 0 ELSE 1 END,
+         CASE 
+           WHEN e.start_time <= SYSUTCDATETIME() AND e.end_time >= SYSUTCDATETIME() THEN 0 
+           WHEN e.start_time > SYSUTCDATETIME() THEN 1 
+           ELSE 2 
+         END ASC,
          e.start_time ASC
        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`
     );
@@ -115,7 +119,11 @@ const getEventsByOrganizer = async (created_by, offset = 0, limit = 10) => {
        LEFT JOIN event_categories c ON e.category_id = c.id
        WHERE e.created_by = @created_by AND e.is_active = 1
        ORDER BY 
-         CASE WHEN e.end_time >= SYSUTCDATETIME() THEN 0 ELSE 1 END,
+         CASE 
+           WHEN e.start_time <= SYSUTCDATETIME() AND e.end_time >= SYSUTCDATETIME() THEN 0 
+           WHEN e.start_time > SYSUTCDATETIME() THEN 1 
+           ELSE 2 
+         END ASC,
          e.start_time ASC
        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`
     );

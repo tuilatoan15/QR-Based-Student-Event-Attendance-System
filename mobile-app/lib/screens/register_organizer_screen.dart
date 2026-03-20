@@ -180,7 +180,7 @@ class _RegisterOrganizerScreenState extends State<RegisterOrganizerScreen> {
 
   // ── Step Indicator ──────────────────────────────────────────────
   Widget _buildStepper() {
-    final steps = ['Tài khoản', 'Tổ chức', 'Xét duyệt'];
+    final steps = ['Tài khoản', 'Tổ chức'];
     return Row(
       children: List.generate(steps.length * 2 - 1, (i) {
         if (i.isOdd) {
@@ -469,48 +469,71 @@ class _RegisterOrganizerScreenState extends State<RegisterOrganizerScreen> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF2563EB).withOpacity(0.06),
-                blurRadius: 20,
-                offset: const Offset(0, 6),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+        child: Column(
+          children: [
+            // Header
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF00CCFF), Color(0xFF0EA5E9)],
+                ),
+                borderRadius: BorderRadius.circular(20),
               ),
-            ],
-          ),
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Header
-                Row(children: [
+              child: Row(
+                children: [
                   Container(
-                    width: 42, height: 42,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEFF6FF),
-                      borderRadius: BorderRadius.circular(12),
+                    width: 100,
+                    height: 100,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.group_add_outlined,
-                        color: _primary, size: 22),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(50),
+                      child: Image.asset('assets/logo/logo.png', fit: BoxFit.cover),
+                    ),
                   ),
-                  const SizedBox(width: 12),
-                  const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Tài khoản Organizer',
-                          style: TextStyle(fontSize: 17,
-                              fontWeight: FontWeight.w700, color: _ink)),
-                      Text('Ban tổ chức · CLB · Khoa',
-                          style: TextStyle(fontSize: 12.5, color: _ink3)),
-                    ],
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Tài khoản Organizer', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                        SizedBox(height: 4),
+                        Text('Dành cho CLB, Khoa, Ban tổ chức', style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4)),
+                      ],
+                    ),
                   ),
-                ]),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Form card
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF00CCFF).withOpacity(0.07),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                 const SizedBox(height: 24),
 
                 // Error banner
@@ -571,6 +594,8 @@ class _RegisterOrganizerScreenState extends State<RegisterOrganizerScreen> {
               ],
             ),
           ),
+        ),
+          ],
         ),
       ),
     );

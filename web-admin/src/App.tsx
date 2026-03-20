@@ -15,6 +15,7 @@ import AttendancePage from './pages/AttendancePage';
 import UsersPage from './pages/UsersPage';
 import RegisterOrganizerPage from './pages/RegisterOrganizerPage';
 import OrganizerApprovalPage from './pages/OrganizerApprovalPage';
+import OrganizerProfilePage from './pages/OrganizerProfilePage';
 
 const App: React.FC = () => {
   return (
@@ -41,12 +42,10 @@ const App: React.FC = () => {
         />
         <Route path="qr-scanner" element={<QRScannerPage />} />
         <Route path="attendance" element={<AttendancePage />} />
-        <Route
-          path="attendance/event/:id"
-          element={<AttendanceHistoryPage />}
-        />
+        <Route path="attendance/event/:id" element={<AttendanceHistoryPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="organizers" element={<OrganizerApprovalPage />} />
+        <Route path="profile" element={<OrganizerProfilePage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -3,12 +3,82 @@ import { adminApi, type OrganizerInfo } from '../api/adminApi';
 import toast from 'react-hot-toast';
 import { Loader2, Check, X, ShieldAlert, CheckCircle, Clock } from 'lucide-react';
 
+// ─── Design tokens ────────────────────────────────────────────────
+const C = {
+  cyan: '#00CCFF',
+  cyanHover: '#00B8E6',
+  dark: '#0A0F1E',
+  white: '#FFFFFF',
+  bg: '#F0F4FF',
+  ink: '#1E293B',
+  ink2: '#475569',
+  ink3: '#64748B',
+  ink4: '#94A3B8',
+  border: '#E2E8F0',
+  surface: '#F8FAFC',
+  amber50: '#FFFBEB',
+  amberBorder: '#FDE68A',
+  amber800: '#92400E',
+  red50: '#FFF1F2',
+  redBorder: '#FECACA',
+  red700: '#B91C1C',
+  green50: '#ECFDF5',
+  greenBorder: '#6EE7B7',
+  green600: '#059669',
+};
+
+// ─── Button Components ───────────────────────────────────────────
+const BtnApprove: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>> = ({ children, style, ...props }) => {
+  const [hov, setHov] = useState(false);
+  return (
+    <button
+      {...props}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        padding: '8px 14px', borderRadius: 10,
+        background: hov && !props.disabled ? C.green600 : C.green50,
+        color: hov && !props.disabled ? '#fff' : C.green600,
+        border: 'none', fontSize: 13, fontWeight: 700,
+        cursor: props.disabled ? 'not-allowed' : 'pointer',
+        opacity: props.disabled ? 0.6 : 1, transition: 'all .2s', ...style
+      }}
+    >
+      {children}
+    </button>
+  );
+};
+
+const BtnReject: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>> = ({ children, style, ...props }) => {
+  const [hov, setHov] = useState(false);
+  return (
+    <button
+      {...props}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        padding: '8px 14px', borderRadius: 10,
+        background: hov && !props.disabled ? C.red700 : C.red50,
+        color: hov && !props.disabled ? '#fff' : C.red700,
+        border: 'none', fontSize: 13, fontWeight: 700,
+        cursor: props.disabled ? 'not-allowed' : 'pointer',
+        opacity: props.disabled ? 0.6 : 1, transition: 'all .2s', ...style
+      }}
+    >
+      {children}
+    </button>
+  );
+};
+
 const OrganizerApprovalPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [organizers, setOrganizers] = useState<OrganizerInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [processingId, setProcessingId] = useState<number | null>(null);
-  
+  const [hoveredRowId, setHoveredRowId] = useState<number | null>(null);
+
   // Modal state
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [selectedOrganizer, setSelectedOrganizer] = useState<OrganizerInfo | null>(null);
@@ -78,119 +148,146 @@ const OrganizerApprovalPage: React.FC = () => {
     }
   };
 
-  const renderTabs = () => (
-    <div className="flex items-center gap-2 p-1.5 bg-slate-100 rounded-2xl mb-8 w-fit border border-slate-200/60 shadow-inner">
-      {[
-        { id: 'pending', label: 'Chờ duyệt', icon: <Clock size={15} /> },
-        { id: 'approved', label: 'Đã duyệt', icon: <CheckCircle size={15} /> },
-        { id: 'rejected', label: 'Từ chối', icon: <X size={15} /> },
-      ].map((tab) => {
-        const isActive = activeTab === tab.id;
-        return (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13.5px] font-semibold transition-all duration-300 ${
-              isActive 
-                ? 'bg-white text-[#00CCFF] shadow-[0_4px_12px_rgba(0,0,0,0.06)]' 
-                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
-            }`}
-          >
-            {tab.icon}
-            {tab.label}
-          </button>
-        );
-      })}
-    </div>
-  );
+  const tabs = [
+    { id: 'pending', label: 'Chờ duyệt', icon: <Clock size={15} /> },
+    { id: 'approved', label: 'Đã duyệt', icon: <CheckCircle size={15} /> },
+    { id: 'rejected', label: 'Từ chối', icon: <X size={15} /> },
+  ];
 
   return (
-    <div className="p-6 md:p-10 max-w-6xl mx-auto min-h-screen">
+    <div style={{ fontFamily: 'inherit' }}>
       
       {/* Header */}
-      <div className="flex items-center gap-4 mb-8">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#00CCFF] to-[#0099CC] flex items-center justify-center text-white shadow-lg shadow-[#00CCFF]/20">
-          <ShieldAlert size={24} strokeWidth={2} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 36 }}>
+        <div style={{
+          width: 50, height: 50, borderRadius: 14,
+          background: C.cyan, color: '#fff',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: `0 8px 24px ${C.cyan}40`
+        }}>
+          <ShieldAlert size={28} strokeWidth={2.5} />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Duyệt Organizer</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Quản lý xét duyệt tài khoản dành cho Ban tổ chức</p>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: C.ink, margin: '0 0 4px', letterSpacing: '-0.5px' }}>
+            Duyệt Organizer
+          </h1>
+          <p style={{ fontSize: 14, color: C.ink4, margin: 0 }}>
+            Kiểm tra và xét duyệt tài khoản Ban tổ chức đăng ký mới
+          </p>
         </div>
       </div>
 
-      {renderTabs()}
+      {/* Tabs */}
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: 8,
+        background: C.surface, padding: 6, borderRadius: 14,
+        marginBottom: 32, border: `1px solid ${C.border}`
+      }}>
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '10px 20px', borderRadius: 10,
+                background: isActive ? '#fff' : 'transparent',
+                color: isActive ? C.cyan : C.ink3,
+                border: 'none', fontSize: 14, fontWeight: 700,
+                cursor: 'pointer', transition: 'all .25s',
+                boxShadow: isActive ? '0 4px 12px rgba(0,0,0,0.06)' : 'none'
+              }}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
 
+      {/* Content */}
       {loading ? (
-        <div className="flex justify-center items-center h-64 bg-white rounded-3xl border border-slate-100 shadow-sm">
-          <Loader2 className="w-8 h-8 text-[#00CCFF] animate-spin" />
+        <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', borderRadius: 20, boxShadow: '0 4px 32px rgba(0,0,0,0.04)' }}>
+          <Loader2 size={32} style={{ color: C.cyan, animation: 'spin 1s linear infinite' }} />
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       ) : organizers.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-16 bg-white rounded-3xl border border-slate-100 shadow-sm text-center">
-          <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-4 border border-slate-100">
-            <ShieldAlert className="w-8 h-8 text-slate-300" />
+        <div style={{ 
+          height: 300, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
+          background: '#fff', borderRadius: 20, border: `1px dashed ${C.border}` 
+        }}>
+          <div style={{ width: 64, height: 64, borderRadius: '50%', background: C.surface, color: C.ink4, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+            <ShieldAlert size={32} strokeWidth={1.5} />
           </div>
-          <h3 className="text-base font-bold text-slate-700 mb-1">Không có dữ liệu</h3>
-          <p className="text-[13.5px] text-slate-500 mb-0">Chưa có hồ sơ organizer nào trong danh sách này.</p>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: C.ink, marginBottom: 4 }}>Không có dữ liệu</h3>
+          <p style={{ fontSize: 14, color: C.ink4 }}>Chưa có hồ sơ organizer nào trong trạng thái này.</p>
         </div>
       ) : (
-        <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.02)] overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-[13.5px]">
-              <thead className="bg-slate-50/50 border-b border-slate-100 text-[11px] font-bold tracking-widest text-slate-400 uppercase">
+        <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 4px 32px rgba(0,0,0,0.04)', overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 14 }}>
+              <thead style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}>
                 <tr>
-                  <th className="px-6 py-5">Tài khoản</th>
-                  <th className="px-6 py-5">Tổ chức</th>
-                  <th className="px-6 py-5">Liên hệ</th>
-                  <th className="px-6 py-5">Tóm tắt</th>
-                  {activeTab === 'pending' && <th className="px-6 py-5 text-right">Hành động</th>}
+                  <th style={{ padding: '16px 24px', color: C.ink4, fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Tài khoản</th>
+                  <th style={{ padding: '16px 24px', color: C.ink4, fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Tổ chức / CLB / Khoa</th>
+                  <th style={{ padding: '16px 24px', color: C.ink4, fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Liên hệ</th>
+                  <th style={{ padding: '16px 24px', color: C.ink4, fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Giới thiệu</th>
+                  {activeTab === 'pending' && <th style={{ padding: '16px 24px', textAlign: 'right', color: C.ink4, fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Hành động</th>}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {organizers.map((org) => (
-                  <tr key={org.user_id} className="hover:bg-slate-50/50 transition-colors group">
-                    <td className="px-6 py-5">
-                      <div className="font-semibold text-slate-800">{org.full_name}</div>
-                      <div className="text-[12.5px] text-slate-500 mt-0.5">{org.email}</div>
-                    </td>
-                    <td className="px-6 py-5">
-                      <div className="font-semibold text-slate-800">{org.organization_name}</div>
-                      <div className="text-[12.5px] text-[#00CCFF] font-medium mt-0.5">{org.position || 'Không có chức vụ'}</div>
-                    </td>
-                    <td className="px-6 py-5">
-                      <div className="text-slate-600 tabular-nums">{org.phone || 'Không có SDT'}</div>
-                      {org.website && (
-                        <a href={org.website} target="_blank" rel="noreferrer" className="text-[12px] text-[#00CCFF] hover:underline font-medium mt-1 block">
-                          Mở Website
-                        </a>
-                      )}
-                    </td>
-                    <td className="px-6 py-5">
-                      <p className="text-slate-600 max-w-[250px] line-clamp-2 leading-relaxed" title={org.bio || ''}>
-                        {org.bio || '—'}
-                      </p>
-                    </td>
-                    {activeTab === 'pending' && (
-                      <td className="px-6 py-5 text-right">
-                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => handleApprove(org.user_id)}
-                            disabled={processingId === org.user_id}
-                            className="bg-emerald-50 hover:bg-emerald-500 text-emerald-600 hover:text-white px-3.5 py-2 rounded-xl text-[13px] font-semibold transition-all flex items-center gap-1.5 disabled:opacity-50"
-                          >
-                            <Check size={16} strokeWidth={2.5} /> Duyệt
-                          </button>
-                          <button
-                            onClick={() => openRejectModal(org)}
-                            disabled={processingId === org.user_id}
-                            className="bg-rose-50 hover:bg-rose-500 text-rose-600 hover:text-white px-3.5 py-2 rounded-xl text-[13px] font-semibold transition-all flex items-center gap-1.5 disabled:opacity-50"
-                          >
-                            <X size={16} strokeWidth={2.5} /> Từ chối
-                          </button>
-                        </div>
+              <tbody>
+                {organizers.map((org, idx) => {
+                  const isHov = hoveredRowId === org.user_id;
+                  return (
+                    <tr 
+                      key={org.user_id} 
+                      onMouseEnter={() => setHoveredRowId(org.user_id)} 
+                      onMouseLeave={() => setHoveredRowId(null)}
+                      style={{ 
+                        borderBottom: idx === organizers.length - 1 ? 'none' : `1px solid ${C.surface}`,
+                        background: isHov ? C.surface : '#fff',
+                        transition: 'background .2s'
+                      }}
+                    >
+                      <td style={{ padding: '18px 24px' }}>
+                        <div style={{ fontWeight: 700, color: C.ink, marginBottom: 4 }}>{org.full_name}</div>
+                        <div style={{ fontSize: 13, color: C.ink4 }}>{org.email}</div>
                       </td>
-                    )}
-                  </tr>
-                ))}
+                      <td style={{ padding: '18px 24px' }}>
+                        <div style={{ fontWeight: 700, color: C.ink, marginBottom: 4 }}>{org.organization_name}</div>
+                        <div style={{ fontSize: 13, color: C.cyan, fontWeight: 600 }}>{org.position || '—'}</div>
+                      </td>
+                      <td style={{ padding: '18px 24px' }}>
+                        <div style={{ color: C.ink3, fontWeight: 600, fontFamily: 'monospace', fontSize: 13, marginBottom: 4 }}>{org.phone || '—'}</div>
+                        {org.website && (
+                          <a href={org.website} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: C.cyan, fontWeight: 600, textDecoration: 'none' }}>
+                            Mở Website
+                          </a>
+                        )}
+                      </td>
+                      <td style={{ padding: '18px 24px' }}>
+                        <p style={{ color: C.ink3, fontSize: 13, lineHeight: 1.5, margin: 0, 
+                                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} 
+                           title={org.bio || ''}>
+                          {org.bio || '—'}
+                        </p>
+                      </td>
+                      {activeTab === 'pending' && (
+                        <td style={{ padding: '18px 24px', textAlign: 'right' }}>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, opacity: isHov ? 1 : 0.4, transition: 'opacity .2s' }}>
+                            <BtnApprove onClick={() => handleApprove(org.user_id)} disabled={processingId === org.user_id}>
+                              <Check size={16} strokeWidth={3} /> Duyệt
+                            </BtnApprove>
+                            <BtnReject onClick={() => openRejectModal(org)} disabled={processingId === org.user_id}>
+                              <X size={16} strokeWidth={3} /> Từ chối
+                            </BtnReject>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -199,41 +296,65 @@ const OrganizerApprovalPage: React.FC = () => {
 
       {/* Reject Modal */}
       {rejectModalOpen && selectedOrganizer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
-            <div className="px-7 pt-7 pb-5">
-              <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center mb-4">
-                <X size={24} strokeWidth={2.5} />
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(10, 15, 30, 0.4)', backdropFilter: 'blur(4px)', padding: 24
+        }}>
+          <div style={{
+            background: '#fff', width: '100%', maxWidth: 440, borderRadius: 24,
+            boxShadow: '0 24px 48px rgba(0,0,0,0.12)', overflow: 'hidden'
+          }}>
+            <div style={{ padding: '32px 32px 24px' }}>
+              <div style={{ width: 56, height: 56, borderRadius: '50%', background: C.red50, color: C.red700, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+                <X size={28} strokeWidth={2.5} />
               </div>
-              <h3 className="text-xl font-bold text-slate-800 mb-2">Từ chối Organizer</h3>
-              <p className="text-[14.5px] text-slate-500 leading-relaxed mb-6">
-                Bạn đang từ chối yêu cầu của <strong className="text-slate-800">{selectedOrganizer.full_name}</strong> ({selectedOrganizer.organization_name}). Hành động này không thể hoàn tác.
+              <h3 style={{ fontSize: 22, fontWeight: 800, color: C.ink, marginBottom: 8 }}>Từ chối Organizer</h3>
+              <p style={{ fontSize: 14, color: C.ink3, lineHeight: 1.6, marginBottom: 24 }}>
+                Bạn đang từ chối yêu cầu của <strong style={{color: C.ink}}>{selectedOrganizer.full_name}</strong> ({selectedOrganizer.organization_name}).
               </p>
 
-              <label className="block text-[11px] font-bold tracking-widest text-slate-400 uppercase mb-2">Lý do từ chối *</label>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: C.ink4, marginBottom: 8 }}>
+                Lý do từ chối *
+              </label>
               <textarea
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
-                className="w-full text-[14.5px] rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-200 focus:border-rose-400 p-4 outline-none transition-all resize-none placeholder-slate-400 text-slate-800"
-                rows={3}
-                placeholder="Ví dụ: Thiếu thông tin liên hệ, chức vụ không rõ ràng..."
                 autoFocus
+                placeholder="Ví dụ: Thông tin không hợp lệ..."
+                style={{
+                  width: '100%', height: 100, padding: 16, borderRadius: 12,
+                  border: `1.5px solid ${C.border}`, background: C.surface, color: C.ink,
+                  fontSize: 14, fontFamily: 'inherit', resize: 'none', outline: 'none'
+                }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = C.red700; e.currentTarget.style.background = '#fff'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = C.surface; }}
               />
             </div>
-            <div className="p-5 flex justify-end gap-2.5 bg-slate-50/50 border-t border-slate-100">
+            
+            <div style={{ padding: '20px 32px', background: C.surface, display: 'flex', justifyContent: 'flex-end', gap: 12, borderTop: `1px solid ${C.border}` }}>
               <button
                 onClick={() => setRejectModalOpen(false)}
-                className="px-5 py-2.5 text-[14px] font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-all"
                 disabled={processingId === selectedOrganizer.user_id}
+                style={{
+                  padding: '12px 20px', borderRadius: 12, background: 'transparent',
+                  color: C.ink3, border: 'none', fontSize: 14, fontWeight: 700, cursor: 'pointer'
+                }}
               >
                 Hủy
               </button>
               <button
                 onClick={handleReject}
                 disabled={processingId === selectedOrganizer.user_id}
-                className="px-5 py-2.5 text-[14px] font-semibold text-white bg-rose-500 hover:bg-rose-600 active:scale-[0.98] rounded-xl transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '12px 24px', borderRadius: 12, background: C.red700,
+                  color: '#fff', border: 'none', fontSize: 14, fontWeight: 700,
+                  cursor: processingId === selectedOrganizer.user_id ? 'not-allowed' : 'pointer',
+                  opacity: processingId === selectedOrganizer.user_id ? 0.6 : 1
+                }}
               >
-                {processingId === selectedOrganizer.user_id && <Loader2 className="w-4 h-4 animate-spin" />}
+                {processingId === selectedOrganizer.user_id && <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />}
                 Xác nhận từ chối
               </button>
             </div>
