@@ -84,6 +84,31 @@ class ApiService {
         .timeout(const Duration(seconds: 10));
   }
 
+  Future<http.Response> patch(
+    String path, {
+    Map<String, dynamic>? body,
+    bool? authenticated,
+  }) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'X-Client': 'mobile-app',
+    };
+
+    final needsAuth = authenticated ?? _isProtectedEndpoint(path);
+
+    if (needsAuth) {
+      final token = await _getToken();
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+    }
+
+    return http
+        .patch(uri, headers: headers, body: jsonEncode(body ?? {}))
+        .timeout(const Duration(seconds: 10));
+  }
+
   Future<http.Response> get(
     String path, {
     bool? authenticated,

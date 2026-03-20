@@ -147,6 +147,48 @@ class AuthService extends ChangeNotifier {
     return false;
   }
 
+  Future<bool> registerOrganizer({
+    required String fullName,
+    required String email,
+    required String password,
+    required String orgName,
+    String? position,
+    String? phone,
+    String? bio,
+  }) async {
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      final response = await _api.post('/api/auth/register-organizer', body: {
+        'full_name': fullName,
+        'email': email,
+        'password': password,
+        'organization_name': orgName,
+        if (position != null && position.isNotEmpty) 'position': position,
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
+        if (bio != null && bio.isNotEmpty) 'bio': bio,
+      });
+
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 201 && decoded['success'] == true) {
+        isLoading = false;
+        notifyListeners();
+        return true; // No auto-login for organizers since they need approval
+      } else {
+        errorMessage = decoded['message'] as String? ?? 'Registration failed';
+      }
+    } catch (e) {
+      errorMessage = 'Unable to register. Please try again.';
+    }
+
+    isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
   Future<void> logout() async {
     currentUser = null;
     _token = null;
@@ -154,6 +196,39 @@ class AuthService extends ChangeNotifier {
     await prefs.remove('auth_token');
     await prefs.remove('user_data'); // Clear user data
     notifyListeners();
+  }
+
+  Future<bool> changePassword(String oldPassword, String newPassword) async {
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      final response = await _api.patch(
+        '/api/users/me/password',
+        body: {
+          'old_password': oldPassword,
+          'new_password': newPassword,
+        },
+        authenticated: true,
+      );
+
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200 && decoded['success'] == true) {
+        isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        errorMessage = decoded['message'] as String? ?? 'Đổi mật khẩu thất bại';
+      }
+    } catch (e) {
+      errorMessage = 'Không thể kết nối. Vui lòng thử lại sau.';
+    }
+
+    isLoading = false;
+    notifyListeners();
+    return false;
   }
 
   Future<bool> updateAvatar(String filePath) async {

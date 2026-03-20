@@ -171,7 +171,7 @@ class OrganizerService extends ChangeNotifier {
                 ? 'checked_in'
                 : 'registered',
             checkInTime: m['check_in_time'] != null
-                ? DateTime.tryParse(m['check_in_time'] as String)
+                ? DateTime.tryParse(m['check_in_time'].toString().endsWith('Z') ? m['check_in_time'] : '${m['check_in_time']}Z')?.toLocal()
                 : null,
           );
         }).toList();

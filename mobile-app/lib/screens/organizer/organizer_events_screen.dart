@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../services/organizer_service.dart';
 import '../../models/event.dart';
 import 'organizer_event_form_screen.dart';
+import '../../utils/string_utils.dart';
 
 class OrganizerEventsScreen extends StatefulWidget {
   const OrganizerEventsScreen({super.key});
@@ -79,8 +80,8 @@ class _OrganizerEventsScreenState extends State<OrganizerEventsScreen> {
     const accent = Color(0xFF6C63FF);
 
     final filtered = service.myEvents.where((e) {
-      final q = _searchQuery.toLowerCase();
-      return q.isEmpty || e.title.toLowerCase().contains(q) || e.location.toLowerCase().contains(q);
+      final q = removeDiacritics(_searchQuery).toLowerCase();
+      return q.isEmpty || removeDiacritics(e.title).toLowerCase().contains(q) || removeDiacritics(e.location).toLowerCase().contains(q);
     }).toList();
 
     return Scaffold(

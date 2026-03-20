@@ -11,7 +11,10 @@ const {
 const {
   getUserNotifications,
   markNotificationAsRead,
-  updateAvatar
+  updateAvatar,
+  changePassword,
+  getOrganizerProfile,
+  updateOrganizerProfile
 } = require('../controllers/userController');
 const upload = require('../middlewares/uploadMiddleware');
 
@@ -21,6 +24,11 @@ router.get('/me/events', auth, getUserEvents);
 router.get('/me/notifications', auth, getUserNotifications);
 router.patch('/me/notifications/:id/read', validateId('id'), auth, markNotificationAsRead);
 router.post('/me/avatar', auth, upload.single('avatar'), updateAvatar);
+router.patch('/me/password', auth, changePassword);
+
+// Organizer Profile
+router.get('/me/organizer-profile', auth, authorizeRoles('organizer'), getOrganizerProfile);
+router.patch('/me/organizer-profile', auth, authorizeRoles('organizer'), updateOrganizerProfile);
 
 // Admin user management
 router.get('/', auth, authorizeRoles('admin'), listUsersHandler);

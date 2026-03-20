@@ -23,5 +23,13 @@ export const usersApi = {
   setActive(userId: number, is_active: boolean) {
     return axiosClient.patch(`/users/${userId}/active`, { is_active });
   },
+
+  getOrganizerProfile() {
+    return axiosClient.get('/users/me/organizer-profile');
+  },
+
+  updateOrganizerProfile(data: any) {
+    return axiosClient.patch('/users/me/organizer-profile', data);
+  }
 };
 

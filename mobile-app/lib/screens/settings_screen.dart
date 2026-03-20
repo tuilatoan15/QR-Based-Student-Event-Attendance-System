@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/theme_provider.dart';
+import '../services/auth_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -191,15 +192,21 @@ class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
     }
 
     setState(() { _isLoading = true; _errorMsg = null; });
-    // Fake API call
-    await Future.delayed(const Duration(seconds: 1));
+    
+    final authService = context.read<AuthService>();
+    final success = await authService.changePassword(oldPass, newPass);
+    
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    if (Navigator.canPop(context)) Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Đổi mật khẩu thành công!'), backgroundColor: Colors.green),
-    );
+    if (success) {
+      if (Navigator.canPop(context)) Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đổi mật khẩu thành công!'), backgroundColor: Colors.green),
+      );
+    } else {
+      setState(() => _errorMsg = authService.errorMessage ?? 'Đổi mật khẩu thất bại');
+    }
   }
 
   @override
@@ -217,56 +224,58 @@ class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
         color: bg,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Đổi mật khẩu', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: textColor)),
-              IconButton(icon: const Icon(Icons.close_rounded), onPressed: () { if (Navigator.canPop(context)) Navigator.pop(context); }),
-            ],
-          ),
-          const SizedBox(height: 16),
-          if (_errorMsg != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-              child: Row(
-                children: [
-                  const Icon(Icons.error_outline_rounded, color: Colors.red, size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(_errorMsg!, style: const TextStyle(color: Colors.red, fontSize: 13))),
-                ],
-              ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Đổi mật khẩu', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: textColor)),
+                IconButton(icon: const Icon(Icons.close_rounded), onPressed: () { if (Navigator.canPop(context)) Navigator.pop(context); }),
+              ],
             ),
-          TextFormField(
-            controller: _oldPassCtrl,
-            obscureText: true,
-            decoration: const InputDecoration(labelText: 'Mật khẩu cũ'),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _newPassCtrl,
-            obscureText: true,
-            decoration: const InputDecoration(labelText: 'Mật khẩu mới (từ 6 ký tự)'),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _confirmPassCtrl,
-            obscureText: true,
-            decoration: const InputDecoration(labelText: 'Xác nhận lại mật khẩu mới'),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: _isLoading ? null : _submit,
-            child: _isLoading 
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Text('Lưu thay đổi'),
-          ),
-        ],
+            const SizedBox(height: 16),
+            if (_errorMsg != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline_rounded, color: Colors.red, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(_errorMsg!, style: const TextStyle(color: Colors.red, fontSize: 13))),
+                  ],
+                ),
+              ),
+            TextFormField(
+              controller: _oldPassCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Mật khẩu cũ'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _newPassCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Mật khẩu mới (từ 6 ký tự)'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _confirmPassCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Xác nhận lại mật khẩu mới'),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _isLoading ? null : _submit,
+              child: _isLoading 
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('Lưu thay đổi'),
+            ),
+          ],
+        ),
       ),
     );
   }

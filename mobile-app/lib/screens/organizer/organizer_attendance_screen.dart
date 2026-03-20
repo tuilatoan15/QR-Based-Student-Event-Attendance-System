@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../services/organizer_service.dart';
 import '../../models/event.dart';
 import '../../models/participant.dart';
+import '../../utils/string_utils.dart';
 
 class OrganizerAttendanceScreen extends StatefulWidget {
   const OrganizerAttendanceScreen({super.key});
@@ -74,11 +75,11 @@ class _OrganizerAttendanceScreenState extends State<OrganizerAttendanceScreen> {
 
     // 1. Search filter
     final searched = svc.attendance.where((p) {
-      final q = _searchQuery.toLowerCase();
+      final q = removeDiacritics(_searchQuery).toLowerCase();
       return q.isEmpty ||
-          p.fullName.toLowerCase().contains(q) ||
-          p.email.toLowerCase().contains(q) ||
-          (p.studentCode ?? '').toLowerCase().contains(q);
+          removeDiacritics(p.fullName).toLowerCase().contains(q) ||
+          removeDiacritics(p.email).toLowerCase().contains(q) ||
+          removeDiacritics(p.studentCode ?? '').toLowerCase().contains(q);
     }).toList();
 
     // Calculate total counts based on search (regardless of status filter)

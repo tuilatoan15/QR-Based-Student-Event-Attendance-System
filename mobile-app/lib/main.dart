@@ -6,8 +6,10 @@ import 'services/auth_service.dart';
 import 'services/event_service.dart';
 import 'services/organizer_service.dart';
 import 'services/notification_service.dart';
+import 'services/user_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
+import 'screens/register_organizer_screen.dart';
 import 'screens/event_list_screen.dart';
 import 'screens/event_detail_screen.dart';
 import 'screens/my_events_screen.dart';
@@ -15,6 +17,7 @@ import 'screens/qr_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/organizer/organizer_shell.dart';
+import 'screens/organizer/organizer_profile_screen.dart';
 import 'services/theme_provider.dart';
 
 void main() async {
@@ -46,6 +49,9 @@ class SmartEventAttendanceApp extends StatelessWidget {
         ),
         ChangeNotifierProvider<NotificationService>(
           create: (_) => NotificationService(),
+        ),
+        ChangeNotifierProvider<UserService>(
+          create: (_) => UserService(),
         ),
         ChangeNotifierProvider<ThemeProvider>(
           create: (_) => ThemeProvider(),
@@ -135,7 +141,7 @@ class SmartEventAttendanceApp extends StatelessWidget {
             contentTextStyle: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500),
           ),
         ),
-        themeMode: themeProvider.themeMode,
+        themeMode: ThemeMode.light,
         darkTheme: ThemeData(
           useMaterial3: true,
           colorScheme: ColorScheme.fromSeed(
@@ -200,6 +206,7 @@ class SmartEventAttendanceApp extends StatelessWidget {
         routes: {
           LoginScreen.routeName: (context) => const LoginScreen(),
           RegisterScreen.routeName: (context) => const RegisterScreen(),
+          RegisterOrganizerScreen.routeName: (context) => const RegisterOrganizerScreen(),
           EventListScreen.routeName: (context) => const EventListScreen(),
           EventDetailScreen.routeName: (context) => const EventDetailScreen(),
           MyEventsScreen.routeName: (context) => const MyEventsScreen(),
@@ -207,6 +214,7 @@ class SmartEventAttendanceApp extends StatelessWidget {
           NotificationsScreen.routeName: (context) => const NotificationsScreen(),
           ProfileScreen.routeName: (context) => const ProfileScreen(),
           OrganizerShell.routeName: (context) => const OrganizerShell(),
+          OrganizerProfileScreen.routeName: (context) => const OrganizerProfileScreen(),
         },
       );
     },

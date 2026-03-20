@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard,
   Calendar,
@@ -7,6 +8,7 @@ import {
   QrCode,
   ClipboardCheck,
   Users,
+  UserCheck,
 } from 'lucide-react';
 
 type NavItem = {
@@ -16,16 +18,24 @@ type NavItem = {
   icon: React.ReactNode;
 };
 
-const navItems: NavItem[] = [
-  { to: '/', label: 'Dashboard', end: true, icon: <LayoutDashboard size={18} /> },
-  { to: '/events', label: 'Events', icon: <Calendar size={18} /> },
-  { to: '/events/create', label: 'Create Event', icon: <PlusCircle size={18} /> },
-  { to: '/qr-scanner', label: 'QR Scanner', icon: <QrCode size={18} /> },
-  { to: '/attendance', label: 'Attendance', icon: <ClipboardCheck size={18} /> },
-  { to: '/users', label: 'Users', icon: <Users size={18} /> },
-];
-
 const Sidebar: React.FC = () => {
+  const { user } = useAuth();
+
+  const navItems: NavItem[] = [
+    { to: '/', label: 'Dashboard', end: true, icon: <LayoutDashboard size={18} /> },
+    { to: '/events', label: 'Events', icon: <Calendar size={18} /> },
+    { to: '/events/create', label: 'Create Event', icon: <PlusCircle size={18} /> },
+    { to: '/qr-scanner', label: 'QR Scanner', icon: <QrCode size={18} /> },
+    { to: '/attendance', label: 'Attendance', icon: <ClipboardCheck size={18} /> },
+    ...((user?.role === 'admin' || !user?.role) ? [
+      { to: '/users', label: 'Users', icon: <Users size={18} /> },
+      { to: '/organizers', label: 'Organizers', icon: <UserCheck size={18} /> },
+    ] : []),
+    ...(user?.role === 'organizer' ? [
+      { to: '/profile', label: 'My Organization', icon: <UserCheck size={18} /> },
+    ] : []),
+  ];
+
   const base =
     'flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition';
 

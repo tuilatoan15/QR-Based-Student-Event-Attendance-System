@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../services/organizer_service.dart';
 import '../../models/event.dart';
 import '../../models/participant.dart';
+import '../../utils/string_utils.dart';
 
 class OrganizerParticipantsScreen extends StatefulWidget {
   const OrganizerParticipantsScreen({super.key});
@@ -35,8 +36,8 @@ class _OrganizerParticipantsScreenState extends State<OrganizerParticipantsScree
     final service = context.watch<OrganizerService>();
 
     final filtered = service.participants.where((p) {
-      final q = _searchQuery.toLowerCase();
-      return q.isEmpty || p.fullName.toLowerCase().contains(q) || (p.email.toLowerCase().contains(q)) || (p.studentCode ?? '').toLowerCase().contains(q);
+      final q = removeDiacritics(_searchQuery).toLowerCase();
+      return q.isEmpty || removeDiacritics(p.fullName).toLowerCase().contains(q) || removeDiacritics(p.email).toLowerCase().contains(q) || removeDiacritics(p.studentCode ?? '').toLowerCase().contains(q);
     }).toList();
 
     // Prevent DropdownButton assertion error if the selected event is no longer in the list

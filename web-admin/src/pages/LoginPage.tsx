@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -187,6 +187,12 @@ const LoginPage: React.FC = () => {
                 <button type="submit" disabled={loading} className="lp-btn">
                   {loading ? 'ĐANG XỬ LÝ...' : 'XÁC NHẬN ĐĂNG NHẬP'}
                 </button>
+
+                <div style={{ textAlign: 'center', marginTop: '15px' }}>
+                  <Link to="/register-organizer" style={{ color: '#00CCFF', fontSize: '14px', fontWeight: '500', textDecoration: 'none' }}>
+                    Đăng ký tài khoản dành cho Tổ chức (CLB/Khoa)
+                  </Link>
+                </div>
               </form>
             </div>
           </div>

@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import '../widgets/primary_button.dart';
 import 'event_list_screen.dart';
 import 'register_screen.dart';
+import 'register_organizer_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -44,7 +45,37 @@ class _LoginScreenState extends State<LoginScreen> {
       Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
     } else {
       setState(() {});
+      if (auth.errorMessage != null) {
+        if (auth.errorMessage!.contains('chưa được Admin phê duyệt') || auth.errorMessage!.contains('chờ admin duyệt')) {
+          _showStatusDialog('Chờ duyệt', 'Tài khoản của bạn chưa được Admin phê duyệt.', Icons.hourglass_empty_rounded, Colors.orange);
+        } else if (auth.errorMessage!.contains('từ chối')) {
+          _showStatusDialog('Từ chối', auth.errorMessage!, Icons.cancel_outlined, Colors.red);
+        }
+      }
     }
+  }
+
+  void _showStatusDialog(String title, String message, IconData icon, Color color) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(icon, color: color),
+            const SizedBox(width: 8),
+            Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 18)),
+          ],
+        ),
+        content: Text(message, style: const TextStyle(fontSize: 15)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Đóng'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -242,7 +273,20 @@ class _LoginScreenState extends State<LoginScreen> {
                               foregroundColor: const Color(0xFF2563EB),
                               padding: const EdgeInsets.symmetric(horizontal: 8),
                             ),
-                            child: const Text('Đăng ký ngay', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                            child: const Text('Đăng ký sinh viên', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                          ),
+                        ],
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pushNamed(RegisterOrganizerScreen.routeName),
+                            style: TextButton.styleFrom(
+                              foregroundColor: const Color(0xFF00B4D8),
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                            ),
+                            child: const Text('Đăng ký tài khoản Organizer', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
                           ),
                         ],
                       ),

@@ -24,7 +24,7 @@ class EventParticipant {
       registrationStatus:
           json['registration_status'] as String? ?? 'registered',
       checkinTime: json['checkin_time'] != null
-          ? DateTime.parse(json['checkin_time'] as String)
+          ? DateTime.tryParse(json['checkin_time'].toString().endsWith('Z') ? json['checkin_time'] : '${json['checkin_time']}Z')?.toLocal()
           : null,
     );
   }

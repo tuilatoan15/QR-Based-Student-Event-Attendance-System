@@ -4,9 +4,10 @@ import 'package:intl/intl.dart';
 import '../../services/organizer_service.dart';
 import '../../services/auth_service.dart';
 import '../../models/event.dart';
-import 'organizer_event_form_screen.dart';
 import '../event_detail_screen.dart';
 import 'organizer_shell.dart';
+import 'organizer_profile_screen.dart';
+import 'organizer_event_form_screen.dart';
 
 class OrganizerDashboardScreen extends StatefulWidget {
   const OrganizerDashboardScreen({super.key});
@@ -92,15 +93,27 @@ class _OrganizerDashboardScreenState extends State<OrganizerDashboardScreen> {
                         ],
                       ),
                     ),
-                    IconButton(
-                      onPressed: () async {
-                        await auth.logout();
-                        if (context.mounted) {
-                          Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
-                        }
-                      },
-                      icon: const Icon(Icons.logout_rounded, color: Colors.white70, size: 22),
-                      tooltip: 'Đăng xuất',
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          onPressed: () {
+                            Navigator.of(context).pushNamed(OrganizerProfileScreen.routeName);
+                          },
+                          icon: const Icon(Icons.account_circle_rounded, color: Colors.white70, size: 26),
+                          tooltip: 'Hồ sơ',
+                        ),
+                        IconButton(
+                          onPressed: () async {
+                            await context.read<AuthService>().logout();
+                            if (context.mounted) {
+                              Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+                            }
+                          },
+                          icon: const Icon(Icons.logout_rounded, color: Colors.white70, size: 24),
+                          tooltip: 'Đăng xuất',
+                        ),
+                      ],
                     ),
                   ],
                 ),

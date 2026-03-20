@@ -30,7 +30,7 @@ class EventService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await _api.get('/api/events');
+      final response = await _api.get('/api/events?limit=100');
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (response.statusCode == 200 && decoded['success'] == true) {
