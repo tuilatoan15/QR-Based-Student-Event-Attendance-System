@@ -71,7 +71,7 @@ const listUsers = async ({ offset = 0, limit = 50, search = '' } = {}) => {
   }
 
   const result = await request.query(
-    `SELECT u.id, u.full_name, u.email, u.student_code, u.is_active, u.created_at, u.updated_at,
+    `SELECT u.id, u.full_name, u.email, u.avatar, u.student_code, u.is_active, u.created_at, u.updated_at,
             r.name AS role_name
      FROM users u
      JOIN roles r ON u.role_id = r.id

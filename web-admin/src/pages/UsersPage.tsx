@@ -154,7 +154,11 @@ const UsersPage: React.FC = () => {
                     <tr key={u.id}>
                       <td>
                         <div className="up-user-cell">
-                          <div className="up-avatar">{initials(u.full_name||'?')}</div>
+                          {u.avatar ? (
+                            <img src={u.avatar} alt={u.full_name} className="up-avatar" style={{ objectFit: 'cover', background: '#fff' }} />
+                          ) : (
+                            <div className="up-avatar">{initials(u.full_name||'?')}</div>
+                          )}
                           <div>
                             <div className="up-user-name">{u.full_name}</div>
                             <div className="up-user-email">{u.email}</div>

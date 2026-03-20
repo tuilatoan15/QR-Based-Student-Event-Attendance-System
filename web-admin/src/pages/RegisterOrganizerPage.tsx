@@ -1,184 +1,49 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { authApi } from '../api/authApi';
-import {
-  Mail, Lock, User, FileText, Users, Phone,
-  CheckCircle, AlertCircle, ArrowRight, ArrowLeft,
-  Eye, EyeOff, Briefcase, Shield, Clock, BarChart2,
-} from 'lucide-react';
 import toast from 'react-hot-toast';
 
-// ─── Helpers ─────────────────────────────────────────────────────
-function pwStrength(pw: string): number {
+function pwStrength(pw: string): 0 | 1 | 2 | 3 {
   if (!pw) return 0;
   let s = 0;
   if (pw.length >= 6) s++;
   if (pw.length >= 10) s++;
   if (/[A-Z]/.test(pw) || /[0-9]/.test(pw) || /[^a-zA-Z0-9]/.test(pw)) s++;
-  return s;
+  return s as 0 | 1 | 2 | 3;
 }
+const strColor: Record<number, string> = { 0: '#e2e8f0', 1: '#f87171', 2: '#fbbf24', 3: '#34d399' };
 
-const inp =
-  'w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl ' +
-  'text-[14px] text-slate-800 placeholder-slate-400 ' +
-  'focus:outline-none focus:border-[#00CCFF] focus:ring-2 focus:ring-[#00CCFF]/20 transition-colors';
-
-const Field: React.FC<{ label: string; required?: boolean; hint?: string; children: React.ReactNode }> = ({ label, required, hint, children }) => (
-  <div className="flex flex-col gap-1.5">
-    <label className="text-[11px] font-bold tracking-widest uppercase text-slate-400">
-      {label}{required && <span className="text-[#00CCFF] ml-0.5 normal-case tracking-normal">*</span>}
-    </label>
-    {children}
-    {hint && <p className="text-[11px] text-slate-400">{hint}</p>}
-  </div>
-);
-
-const Ico: React.FC<{ children: React.ReactNode; top?: boolean }> = ({ children, top }) => (
-  <div className={`absolute left-3 ${top ? 'top-3' : 'top-1/2 -translate-y-1/2'} text-slate-400 pointer-events-none`}>
-    {children}
-  </div>
-);
-
-// ─── Step Indicator ───────────────────────────────────────────────
-const Steps: React.FC<{ step: number }> = ({ step }) => {
-  const labels = ['Tài khoản', 'Tổ chức', 'Xét duyệt'];
-  return (
-    <div className="flex items-start mb-7">
-      {labels.map((lbl, i) => (
-        <React.Fragment key={i}>
-          <div className="flex flex-col items-center gap-1 shrink-0">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all border-2
-              ${i < step  ? 'bg-emerald-500 border-emerald-500 text-white'
-              : i === step ? 'bg-[#00CCFF] border-[#00CCFF] text-white'
-                           : 'bg-white border-slate-200 text-slate-400'}`}>
-              {i < step ? <CheckCircle size={13} strokeWidth={3} /> : i + 1}
-            </div>
-            <span className={`text-[10.5px] font-semibold whitespace-nowrap
-              ${i === step ? 'text-slate-700' : 'text-slate-400'}`}>{lbl}</span>
-          </div>
-          {i < 2 && (
-            <div className={`flex-1 h-[2px] mx-2 mt-4 rounded-full transition-all
-              ${i < step ? 'bg-[#00CCFF]' : 'bg-slate-200'}`} />
-          )}
-        </React.Fragment>
-      ))}
-    </div>
-  );
-};
-
-// ─── Left Panel ───────────────────────────────────────────────────
-const Left: React.FC<{ step: number }> = ({ step }) => {
-  const features = [
-    { icon: <Shield size={15} />, t: 'Xét duyệt bởi admin', s: 'Tài khoản kích hoạt sau khi được phê duyệt' },
-    { icon: <Clock size={15} />,  t: 'Điểm danh thời gian thực', s: 'Quét QR, ghi nhận tức thì không chờ đợi' },
-    { icon: <BarChart2 size={15} />, t: 'Xuất báo cáo & Google Sheets', s: 'Đồng bộ danh sách tham dự tự động' },
-  ];
-  return (
-    <div className="hidden lg:flex flex-col p-12 relative overflow-hidden" style={{ background: '#0A0F1E' }}>
-      {/* dot-grid */}
-      <div className="absolute inset-0 pointer-events-none" style={{
-        backgroundImage: 'radial-gradient(circle, rgba(0,204,255,0.14) 1px, transparent 1px)',
-        backgroundSize: '28px 28px',
-      }} />
-      {/* brand */}
-      <div className="relative z-10 flex items-center gap-2.5">
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: '#00CCFF' }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0A0F1E" strokeWidth="2.5" strokeLinecap="round">
-            <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" />
-            <rect x="3" y="14" width="7" height="7" rx="1.5" /><path d="M14 17h7M17.5 14v7" />
-          </svg>
-        </div>
-        <span className="text-white font-bold text-[15px] tracking-tight">EventSync</span>
-      </div>
-
-      {/* hero */}
-      <div className="relative z-10 mt-16 flex-1">
-        <div className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 mb-6 border"
-          style={{ background: 'rgba(0,204,255,0.08)', borderColor: 'rgba(0,204,255,0.2)' }}>
-          <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#00CCFF' }} />
-          <span className="text-[11px] font-semibold tracking-widest uppercase" style={{ color: '#00CCFF' }}>
-            Dành cho ban tổ chức
-          </span>
-        </div>
-        <h1 className="text-white text-[30px] font-bold leading-tight tracking-tight mb-4">
-          Quản lý sự kiện<br />sinh viên{' '}
-          <span style={{ color: '#00CCFF' }}>chuyên nghiệp</span>
-        </h1>
-        <p className="text-sm leading-relaxed mb-10 max-w-[280px]" style={{ color: 'rgba(255,255,255,0.4)' }}>
-          Nền tảng điểm danh QR Code cho CLB, Khoa và ban tổ chức tại trường đại học.
-        </p>
-        {features.map((f, i) => (
-          <div key={i} className="flex items-center gap-3.5 rounded-2xl px-4 py-3.5 mb-3 border"
-            style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.07)' }}>
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 border"
-              style={{ background:'rgba(0,204,255,0.08)', borderColor:'rgba(0,204,255,0.18)', color:'rgba(0,204,255,0.8)' }}>
-              {f.icon}
-            </div>
-            <div>
-              <p className="text-[13px] font-medium mb-0.5" style={{ color: 'rgba(255,255,255,0.85)' }}>{f.t}</p>
-              <p className="text-[11.5px]" style={{ color: 'rgba(255,255,255,0.35)' }}>{f.s}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* step dots */}
-      <div className="relative z-10 flex items-center gap-1.5 mt-8">
-        {[0,1,2].map(i => (
-          <div key={i} className="h-[3px] rounded-full transition-all duration-300"
-            style={{ width: i === step ? 24 : 8, background: i === step ? '#00CCFF' : 'rgba(255,255,255,0.15)' }} />
-        ))}
-      </div>
-    </div>
-  );
-};
-
-// ─── Cyan button ─────────────────────────────────────────────────
-const CyanBtn: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { full?: boolean }> = ({ children, full, ...props }) => (
-  <button
-    {...props}
-    className={`${full ? 'w-full' : ''} text-white font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed`}
-    style={{ background: '#00CCFF', ...props.style }}
-    onMouseEnter={e => { if (!props.disabled) e.currentTarget.style.background = '#00B8E6'; }}
-    onMouseLeave={e => { e.currentTarget.style.background = '#00CCFF'; }}
-  >
-    {children}
-  </button>
-);
-
-// ─── Main component ───────────────────────────────────────────────
 export default function RegisterOrganizerPage() {
   const navigate = useNavigate();
-  const [step, setStep]       = useState(0);
+  const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [err, setErr]         = useState('');
-  const [showPw, setShowPw]   = useState(false);
+  const [err, setErr] = useState('');
+  
+  const [showPw, setShowPw] = useState(false);
   const [showCpw, setShowCpw] = useState(false);
-  const [form, setForm]       = useState({
-    fullName:'', email:'', password:'', confirmPassword:'',
-    orgName:'', position:'', phone:'', bio:'',
+  const [form, setForm] = useState({
+    fullName: '', email: '', password: '', confirmPassword: '',
+    orgName: '', position: '', phone: '', bio: '',
   });
 
   const set = (k: keyof typeof form) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm(p => ({ ...p, [k]: e.target.value }));
 
-  const strength   = pwStrength(form.password);
-  const strClr     = ['','bg-red-400','bg-amber-400','bg-emerald-400'][strength] || '';
-  const strLabel   = ['','Yếu','Trung bình','Mạnh'][strength] || '';
+  const strength = pwStrength(form.password);
 
   const validate0 = (): boolean => {
-    if (!form.fullName.trim())                       { setErr('Vui lòng nhập họ và tên'); return false; }
+    if (!form.fullName.trim()) { setErr('Vui lòng nhập họ và tên'); return false; }
     if (!form.email.trim() || !form.email.includes('@')) { setErr('Email không hợp lệ'); return false; }
-    if (form.password.length < 6)                    { setErr('Mật khẩu tối thiểu 6 ký tự'); return false; }
-    if (form.password !== form.confirmPassword)      { setErr('Mật khẩu không khớp'); return false; }
+    if (form.password.length < 6) { setErr('Mật khẩu tối thiểu 6 ký tự'); return false; }
+    if (form.password !== form.confirmPassword) { setErr('Mật khẩu không khớp'); return false; }
     return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.orgName.trim()) { setErr('Vui lòng nhập tên tổ chức'); return; }
+    if (!form.orgName.trim()) { setErr('Vui lòng nhập tên tổ chức/CLB'); return; }
     try {
       setLoading(true); setErr('');
       const res = await authApi.registerOrganizer({
@@ -193,203 +58,306 @@ export default function RegisterOrganizerPage() {
     } finally { setLoading(false); }
   };
 
-  // ── Success ─────────────────────────────────────────────────────
-  if (success) return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-3xl p-10 text-center" style={{ boxShadow:'0 8px 40px rgba(0,0,0,0.08)' }}>
-        <div className="w-20 h-20 rounded-full bg-emerald-50 border-4 border-emerald-100 flex items-center justify-center mx-auto mb-6">
-          <CheckCircle size={40} strokeWidth={1.5} className="text-emerald-500" />
-        </div>
-        <h2 className="text-2xl font-bold text-slate-800 tracking-tight mb-3">Đăng ký thành công!</h2>
-        <p className="text-slate-500 text-sm leading-relaxed mb-8">
-          Tài khoản Organizer của bạn đang chờ admin xét duyệt.
-          Thường mất <strong className="text-slate-700">1–2 ngày làm việc</strong>.
-        </p>
-        <CyanBtn full onClick={() => navigate('/login')}>
-          <ArrowLeft size={16} /> Về trang đăng nhập
-        </CyanBtn>
-      </div>
-    </div>
-  );
+  const features = [
+    'Quét mã QR điểm danh tức thì',
+    'Chủ động xuất báo cáo danh sách tham dự',
+    'Thống kê theo thời gian thực',
+    'Bảo mật tuyệt đối thông tin sinh viên',
+    'Hỗ trợ quản lý chuyên nghiệp cho CLB/Khoa'
+  ];
 
-  // ── Main ────────────────────────────────────────────────────────
+  if (success) {
+    return (
+      <div className="lp-root text-center">
+        <style>{`
+          @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
+          .lp-root * { box-sizing: border-box; margin: 0; padding: 0; }
+          .lp-root { min-height: 100vh; display: flex; align-items: center; justify-content: center; font-family: 'Outfit', sans-serif; background: #f4f7f6; padding: 20px; }
+          .suc-card { background: #fff; padding: 50px 40px; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.08); max-width: 420px; width: 100%; }
+          .suc-icon { width: 80px; height: 80px; background: #ecfdf5; border: 4px solid #6ee7b7; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; color: #059669; font-size: 32px; font-weight: bold; }
+          .lp-btn { width: 100%; padding: 13px; background: #00CCFF; color: #fff; border: none; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 12px rgba(0,204,255,0.3); text-transform: uppercase; margin-top: 25px; }
+          .lp-btn:hover { background: #00B4D8; transform: translateY(-1px); }
+        `}</style>
+        <div className="suc-card">
+          <div className="suc-icon">✓</div>
+          <h2 style={{ fontSize: 24, fontWeight: 800, color: '#1e293b', marginBottom: 10 }}>Đăng ký thành công!</h2>
+          <p style={{ fontSize: 14, color: '#64748b', lineHeight: 1.6 }}>
+            Tài khoản của bạn đang chờ Admin xét duyệt.<br />
+            Quá trình thường mất <strong style={{ color: '#00CCFF' }}>1–2 ngày làm việc</strong>.
+          </p>
+          <button className="lp-btn" onClick={() => navigate('/login')}>Về trang đăng nhập</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen grid" style={{ gridTemplateColumns: '420px 1fr' }}>
-      <Left step={step} />
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
 
-      <div className="flex items-center justify-center bg-slate-100 p-6 overflow-y-auto min-h-screen">
-        <div className="w-full max-w-[460px] bg-white rounded-2xl p-8 my-6" style={{ boxShadow:'0 4px 32px rgba(0,0,0,0.07)' }}>
+        .lp-root *{box-sizing:border-box;margin:0;padding:0}
+        .lp-root{
+          min-height:100vh;display:flex;align-items:center;justify-content:center;
+          font-family:'Outfit',system-ui,sans-serif;
+          background:#f4f7f6;padding:20px;
+        }
 
-          {/* Mobile brand */}
-          <div className="flex lg:hidden items-center gap-2 mb-6">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background:'#00CCFF' }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0A0F1E" strokeWidth="2.5" strokeLinecap="round">
-                <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" />
-                <rect x="3" y="14" width="7" height="7" rx="1.5" /><path d="M14 17h7M17.5 14v7" />
-              </svg>
+        .lp-container{
+          width:100%;max-width:1150px;min-height:650px;
+          background:#fff;border-radius:30px;display:flex;
+          overflow:hidden;box-shadow:0 30px 60px rgba(0,0,0,0.1);
+        }
+
+        /* LEFT SIDE */
+        .lp-left{
+          flex:1;background:linear-gradient(135deg,#00CCFF,#0088CC);
+          padding:60px 45px;display:flex;flex-direction:column;
+          color:#fff;position:relative;
+        }
+        .lp-left-logo{
+          width:120px;height:120px;margin:0 auto 40px;
+          background:rgba(255,255,255,0.2);padding:15px;
+          border-radius:50%;display:flex;align-items:center;justify-content:center;
+          backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.3);
+        }
+        .lp-left-logo img{width:100%;height:100%;object-fit:contain;border-radius:50%;}
+
+        .lp-left-title{font-size:30px;font-weight:800;margin-bottom:20px;letter-spacing:-0.5px;text-align:center;}
+        .lp-left-desc{font-size:15px;color:rgba(255,255,255,0.85);text-align:center;margin-bottom:40px;line-height:1.6;}
+        
+        .lp-feat-list{display:flex;flex-direction:column;gap:18px;max-width:340px;margin:0 auto;}
+        .lp-feat-item{display:flex;align-items:flex-start;gap:15px;font-size:15px;font-weight:500;color:rgba(255,255,255,0.95);}
+        .lp-feat-tick{
+          width:22px;height:22px;background:#fff;border-radius:50%;
+          display:flex;align-items:center;justify-content:center;flex-shrink:0;
+          color:#00CCFF;font-weight:bold;font-size:13px;
+        }
+
+        /* RIGHT SIDE */
+        .lp-right{flex:1.2;background:#fff;padding:50px 60px;display:flex;flex-direction:column;}
+        .lp-right-content{width:100%;max-width:440px;margin:0 auto;}
+
+        .lp-header{margin-bottom:30px;}
+        .lp-title{font-size:26px;font-weight:800;color:#1e293b;margin-bottom:6px;letter-spacing:-0.5px;}
+        .lp-sub{font-size:14px;color:#64748b;font-weight:500;}
+
+        /* STEPS */
+        .lp-steps{display:flex;align-items:center;margin-bottom:25px;}
+        .lp-step{display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0;}
+        .lp-step-circle{
+          width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+          font-size:13px;font-weight:700;border:2px solid;transition:all 0.3s;
+        }
+        .lp-step-done{background:#ecfdf5;border-color:#6ee7b7;color:#059669;}
+        .lp-step-curr{background:#00CCFF;border-color:#00CCFF;color:#fff;}
+        .lp-step-wait{background:#f8fafc;border-color:#e2e8f0;color:#94a3b8;}
+        .lp-step-lbl{font-size:12px;font-weight:600;}
+        .lp-step-lbl.curr{color:#1e293b;}
+        .lp-step-lbl.wait{color:#94a3b8;}
+        .lp-step-line{flex:1;height:2px;border-radius:2px;margin:0 10px;transform:translateY(-10px);transition:all 0.3s;}
+
+        .lp-form{display:flex;flex-direction:column;gap:20px;}
+        .lp-field{display:flex;flex-direction:column;gap:8px;}
+        .lp-field label{font-size:12.5px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.5px;}
+        
+        .lp-in{
+          width:100%;padding:13px 16px;background:#f8fafc;
+          border:1.5px solid #e2e8f0;border-radius:12px;font-size:14.5px;
+          color:#1e293b;transition:all 0.2s;font-family:inherit;
+        }
+        .lp-in:focus{
+          background:#fff;border-color:#00CCFF;outline:none;
+          box-shadow:0 0 0 4px rgba(0,204,255,0.12);
+        }
+
+        .lp-btn{
+          width:100%;padding:14px;background:#00CCFF;color:#fff;
+          border:none;border-radius:12px;font-size:15px;font-weight:700;
+          cursor:pointer;transition:all 0.2sCb;margin-top:10px;
+          box-shadow:0 4px 12px rgba(0,204,255,0.25);
+          display:flex;align-items:center;justify-content:center;gap:8px;
+        }
+        .lp-btn:hover:not(:disabled){background:#00B4D8;transform:translateY(-1px);}
+        .lp-btn:disabled{opacity:0.6;cursor:not-allowed;box-shadow:none;}
+
+        .lp-btn-out{
+          width:100%;padding:14px;background:#fff;color:#475569;
+          border:1.5px solid #e2e8f0;border-radius:12px;font-size:15px;font-weight:600;
+          cursor:pointer;transition:all 0.2s;
+        }
+        .lp-btn-out:hover{background:#f1f5f9;border-color:#cbd5e1;}
+
+        .lp-err{padding:12px;background:#fef2f2;border:1.5px solid #fecaca;border-radius:12px;color:#dc2626;font-size:13.5px;}
+        .lp-notice{padding:12px 14px;background:#fffbeb;border:1.5px solid #fde68a;border-radius:12px;color:#92400e;font-size:13.5px;line-height:1.5;}
+
+        .grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+
+        @media(max-width:950px){
+          .lp-container{flex-direction:column;height:auto;max-width:550px;}
+          .lp-left{display:none;} /* Hoặc thiết kế thu gọn banner */
+          .lp-right{padding:40px 30px;}
+        }
+      `}</style>
+
+      <div className="lp-root">
+        <div className="lp-container">
+          
+          {/* ── Left Side: Features List ── */}
+          <div className="lp-left">
+            <div className="lp-left-logo">
+              <img src="/assets/logo/logo2.png" alt="University Logo 2" />
             </div>
-            <span className="font-bold text-slate-800">EventSync</span>
-          </div>
-
-          <div className="mb-6">
-            <h2 className="text-[22px] font-bold text-slate-800 tracking-tight mb-1.5">Tạo tài khoản Organizer</h2>
-            <p className="text-slate-400 text-sm">Ban tổ chức · CLB · Khoa</p>
-          </div>
-
-          <Steps step={step} />
-
-          {/* Error banner */}
-          {err && (
-            <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-xl p-3.5 mb-5">
-              <AlertCircle size={15} className="text-red-500 mt-0.5 shrink-0" />
-              <p className="text-red-700 text-[13px] leading-snug">{err}</p>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit}>
-
-            {/* ── STEP 0 ─────────────────────────────────────── */}
-            {step === 0 && (
-              <div className="flex flex-col gap-4">
-                <div className="flex items-start gap-2.5 rounded-xl p-3.5 border"
-                  style={{ background:'#FFFBEB', borderColor:'#FDE68A' }}>
-                  <AlertCircle size={14} className="mt-0.5 shrink-0" style={{ color:'#D97706' }} />
-                  <p className="text-[12.5px] leading-relaxed" style={{ color:'#92400E' }}>
-                    Sau khi đăng ký, admin sẽ xét duyệt tài khoản trong{' '}
-                    <strong>1–2 ngày làm việc</strong>.
-                  </p>
+            <h2 className="lp-left-title">Đăng Ký<br/>Ban Tổ Chức</h2>
+            <p className="lp-left-desc">
+              Tạo tài khoản quản lý dành riêng cho các CLB, Liên Chi và Đoàn khoa tại trường.
+            </p>
+            <div className="lp-feat-list">
+              {features.map((f, i) => (
+                <div key={i} className="lp-feat-item">
+                  <div className="lp-feat-tick">✓</div>
+                  {f}
                 </div>
+              ))}
+            </div>
+          </div>
 
-                <Field label="Họ và tên" required>
-                  <div className="relative">
-                    <Ico><User size={15} /></Ico>
-                    <input className={inp} type="text" placeholder="Nguyễn Văn A"
-                      value={form.fullName} onChange={set('fullName')} />
+          {/* ── Right Side: Form ── */}
+          <div className="lp-right">
+            <div className="lp-right-content">
+              
+              <div className="lp-header">
+                <h1 className="lp-title">TẠO TÀI KHOẢN</h1>
+                <p className="lp-sub">Nhập thông tin đăng ký dành cho Ban tổ chức</p>
+              </div>
+
+              {/* Steps */}
+              <div className="lp-steps">
+                <div className="lp-step">
+                  <div className={`lp-step-circle ${step > 0 ? 'lp-step-done' : 'lp-step-curr'}`}>
+                    {step > 0 ? '✓' : '1'}
                   </div>
-                </Field>
-
-                <Field label="Email" required>
-                  <div className="relative">
-                    <Ico><Mail size={15} /></Ico>
-                    <input className={inp} type="email" placeholder="organizer@university.edu"
-                      value={form.email} onChange={set('email')} />
+                  <span className={`lp-step-lbl ${step === 0 ? 'curr' : 'wait'}`}>Tài khoản</span>
+                </div>
+                <div className={`lp-step-line ${step > 0 ? 'bg-[#00CCFF]' : 'bg-[#e2e8f0]'}`} style={{ background: step > 0 ? '#00CCFF' : '#e2e8f0' }} />
+                
+                <div className="lp-step">
+                  <div className={`lp-step-circle ${step === 1 ? 'lp-step-curr' : 'lp-step-wait'}`}>
+                    2
                   </div>
-                </Field>
+                  <span className={`lp-step-lbl ${step === 1 ? 'curr' : 'wait'}`}>Tổ chức</span>
+                </div>
+              </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Mật khẩu" required hint={form.password ? strLabel : undefined}>
-                    <div className="relative">
-                      <Ico><Lock size={15} /></Ico>
-                      <input className={`${inp} pr-10`} type={showPw ? 'text' : 'password'}
-                        placeholder="Tối thiểu 6 ký tự" value={form.password} onChange={set('password')} />
-                      <button type="button" onClick={() => setShowPw(v => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                        {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
-                      </button>
+              {err && <div className="lp-err">{err}</div>}
+
+              <form className="lp-form" onSubmit={handleSubmit}>
+                
+                {step === 0 && (
+                  <>
+                    <div className="lp-notice">
+                      Bạn cần điền thông tin người đại diện. Tài khoản sẽ được kích hoạt sau khi admin phê duyệt.
                     </div>
-                    {form.password && (
-                      <div className="flex gap-1 mt-1">
-                        {[1,2,3].map(i => (
-                          <div key={i} className={`h-[3px] flex-1 rounded-full transition-all ${i <= strength ? strClr : 'bg-slate-200'}`} />
-                        ))}
+                    
+                    <div className="lp-field">
+                      <label>HỌ VÀ TÊN <span style={{color:'#00CCFF'}}>*</span></label>
+                      <input type="text" placeholder="Nguyễn Văn A" className="lp-in" value={form.fullName} onChange={set('fullName')} />
+                    </div>
+
+                    <div className="lp-field">
+                      <label>EMAIL <span style={{color:'#00CCFF'}}>*</span></label>
+                      <input type="email" placeholder="tochuc@university.edu" className="lp-in" value={form.email} onChange={set('email')} />
+                    </div>
+
+                    <div className="grid-2">
+                      <div className="lp-field">
+                        <label style={{display:'flex', justifyContent:'space-between'}}>MẬT KHẨU <span style={{color:'#00CCFF'}}>*</span></label>
+                        <div style={{position:'relative'}}>
+                          <input type={showPw ? 'text' : 'password'} placeholder="Tối thiểu 6 ký tự" className="lp-in" style={{paddingRight: '40px'}} value={form.password} onChange={set('password')} />
+                          <button type="button" onClick={() => setShowPw(!showPw)} style={{ position:'absolute', right:12, top:13, background:'none', border:'none', cursor:'pointer', color:'#94a3b8', fontWeight:600, fontSize:12 }}>
+                            {showPw ? 'ẨN' : 'HIỆN'}
+                          </button>
+                        </div>
+                        {form.password && (
+                          <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                            {[1, 2, 3].map(i => (
+                              <div key={i} style={{ flex: 1, height: 4, borderRadius: 2, background: i <= strength ? strColor[strength] : '#e2e8f0', transition: 'background .2s' }} />
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </Field>
 
-                  <Field label="Xác nhận MK" required>
-                    <div className="relative">
-                      <Ico><Lock size={15} /></Ico>
-                      <input className={`${inp} pr-10`} type={showCpw ? 'text' : 'password'}
-                        placeholder="Nhập lại" value={form.confirmPassword} onChange={set('confirmPassword')} />
-                      <button type="button" onClick={() => setShowCpw(v => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                        {showCpw ? <EyeOff size={15} /> : <Eye size={15} />}
+                      <div className="lp-field">
+                        <label>XÁC NHẬN MK <span style={{color:'#00CCFF'}}>*</span></label>
+                        <div style={{position:'relative'}}>
+                          <input type={showCpw ? 'text' : 'password'} placeholder="Nhập lại" className="lp-in" style={{paddingRight: '40px'}} value={form.confirmPassword} onChange={set('confirmPassword')} />
+                          <button type="button" onClick={() => setShowCpw(!showCpw)} style={{ position:'absolute', right:12, top:13, background:'none', border:'none', cursor:'pointer', color:'#94a3b8', fontWeight:600, fontSize:12 }}>
+                            {showCpw ? 'ẨN' : 'HIỆN'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button type="button" className="lp-btn" onClick={() => { setErr(''); if (validate0()) setStep(1); }}>
+                      TIẾP THEO
+                    </button>
+                    
+                    <div style={{ textAlign: 'center', marginTop: '10px' }}>
+                     <span style={{color:'#64748b', fontSize:'14px'}}>Đã có tài khoản? </span>
+                      <Link to="/login" style={{ color: '#00CCFF', fontSize: '14px', fontWeight: '700', textDecoration: 'none' }}>
+                        Đăng nhập
+                      </Link>
+                    </div>
+                  </>
+                )}
+
+                {step === 1 && (
+                  <>
+                    <div className="lp-field">
+                      <label>TÊN TỔ CHỨC / CLB / KHOA <span style={{color:'#00CCFF'}}>*</span></label>
+                      <input type="text" placeholder="CLB Tin Học / Khoa Kỹ Thuật" className="lp-in" value={form.orgName} onChange={set('orgName')} />
+                    </div>
+
+                    <div className="grid-2">
+                      <div className="lp-field">
+                        <label>CHỨC VỤ</label>
+                        <input type="text" placeholder="Trưởng ban / Chủ nhiệm" className="lp-in" value={form.position} onChange={set('position')} />
+                      </div>
+                      <div className="lp-field">
+                        <label>SỐ ĐIỆN THOẠI</label>
+                        <input type="tel" placeholder="0901 234 567" className="lp-in" value={form.phone} onChange={set('phone')} />
+                      </div>
+                    </div>
+
+                    <div className="lp-field">
+                      <label>GIỚI THIỆU NGẮN (TỐI ĐA 500 KÝ TỰ)</label>
+                      <textarea placeholder="Mô tả về quy mô, hoạt động của tổ chức..." className="lp-in" style={{ height: '80px', resize: 'none' }} maxLength={500} value={form.bio} onChange={set('bio')} />
+                    </div>
+
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:'15px', marginTop:'5px' }}>
+                      <button type="button" className="lp-btn-out" onClick={() => { setErr(''); setStep(0); }}>
+                        QUAY LẠI
+                      </button>
+                      <button type="submit" disabled={loading} className="lp-btn">
+                        {loading ? 'ĐANG XỬ LÝ...' : 'XÁC NHẬN ĐĂNG KÝ'}
                       </button>
                     </div>
-                  </Field>
-                </div>
 
-                <CyanBtn full type="button" onClick={() => { setErr(''); if (validate0()) setStep(1); }}>
-                  Tiếp theo <ArrowRight size={16} />
-                </CyanBtn>
-
-                <p className="text-center text-slate-400 text-[13px]">
-                  Đã có tài khoản?{' '}
-                  <Link to="/login" className="font-semibold hover:underline" style={{ color:'#00CCFF' }}>Đăng nhập</Link>
-                </p>
-              </div>
-            )}
-
-            {/* ── STEP 1 ─────────────────────────────────────── */}
-            {step === 1 && (
-              <div className="flex flex-col gap-4">
-                <Field label="Tên tổ chức / CLB / Khoa" required>
-                  <div className="relative">
-                    <Ico><Users size={15} /></Ico>
-                    <input className={inp} type="text" placeholder="CLB CNTT / Khoa Kỹ thuật"
-                      value={form.orgName} onChange={set('orgName')} />
-                  </div>
-                </Field>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Chức vụ">
-                    <div className="relative">
-                      <Ico><Briefcase size={15} /></Ico>
-                      <input className={inp} type="text" placeholder="Trưởng CLB"
-                        value={form.position} onChange={set('position')} />
+                    <div style={{ textAlign: 'center', marginTop: '10px' }}>
+                     <span style={{color:'#64748b', fontSize:'14px'}}>Đã có tài khoản? </span>
+                      <Link to="/login" style={{ color: '#00CCFF', fontSize: '14px', fontWeight: '700', textDecoration: 'none' }}>
+                        Đăng nhập
+                      </Link>
                     </div>
-                  </Field>
-                  <Field label="Số điện thoại">
-                    <div className="relative">
-                      <Ico><Phone size={15} /></Ico>
-                      <input className={inp} type="tel" placeholder="0901 234 567"
-                        value={form.phone} onChange={set('phone')} />
-                    </div>
-                  </Field>
-                </div>
+                  </>
+                )}
 
-                <Field label="Giới thiệu ngắn" hint="Tối đa 500 ký tự">
-                  <div className="relative">
-                    <Ico top><FileText size={15} /></Ico>
-                    <textarea className={`${inp} !h-auto py-3`} rows={3} maxLength={500}
-                      placeholder="Mô tả về tổ chức của bạn..."
-                      value={form.bio} onChange={set('bio')} />
-                  </div>
-                </Field>
-
-                <div className="flex items-start gap-2.5 rounded-xl p-3.5 border"
-                  style={{ background:'#FFFBEB', borderColor:'#FDE68A' }}>
-                  <AlertCircle size={14} className="mt-0.5 shrink-0" style={{ color:'#D97706' }} />
-                  <p className="text-[12.5px] leading-relaxed" style={{ color:'#92400E' }}>
-                    Tài khoản sẽ được kích hoạt sau khi admin phê duyệt. Bạn sẽ nhận thông báo qua email.
-                  </p>
-                </div>
-
-                <div className="grid gap-2.5" style={{ gridTemplateColumns:'1fr 2fr' }}>
-                  <button type="button" onClick={() => { setErr(''); setStep(0); }}
-                    className="flex items-center justify-center gap-1.5 border-2 border-slate-200 hover:border-slate-300 bg-white text-slate-600 font-semibold py-3.5 rounded-xl transition-colors">
-                    <ArrowLeft size={15} /> Quay lại
-                  </button>
-                  <CyanBtn type="submit" disabled={loading}>
-                    {loading
-                      ? <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <path d="M21 12a9 9 0 1 1-6.22-8.56" strokeLinecap="round" />
-                        </svg>
-                      : <CheckCircle size={15} />}
-                    {loading ? 'Đang xử lý...' : 'Gửi yêu cầu đăng ký'}
-                  </CyanBtn>
-                </div>
-
-                <p className="text-center text-slate-400 text-[13px]">
-                  Đã có tài khoản?{' '}
-                  <Link to="/login" className="font-semibold hover:underline" style={{ color:'#00CCFF' }}>Đăng nhập</Link>
-                </p>
-              </div>
-            )}
-
-          </form>
+              </form>
+            </div>
+          </div>
+          
         </div>
       </div>
-    </div>
+    </>
   );
 }

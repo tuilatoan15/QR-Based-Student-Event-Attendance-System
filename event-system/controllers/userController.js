@@ -153,6 +153,16 @@ const updateOrganizerProfile = async (req, res, next) => {
     }
 
     if (organization_name !== undefined || position !== undefined || phone !== undefined || bio !== undefined || website !== undefined) {
+      // Ensure organizer_info exists
+      const checkOrg = await pool.request()
+        .input('check_uid', sql.Int, userId)
+        .query('SELECT id FROM organizer_info WHERE user_id = @check_uid');
+      if (checkOrg.recordset.length === 0) {
+        await pool.request()
+          .input('new_uid', sql.Int, userId)
+          .query("INSERT INTO organizer_info (user_id, approval_status, created_at, updated_at) VALUES (@new_uid, 'approved', GETDATE(), GETDATE())");
+      }
+
       const request = pool.request().input('user_id', sql.Int, userId);
       const updates = [];
       if (organization_name !== undefined) { updates.push('organization_name = @org_name'); request.input('org_name', sql.NVarChar(255), organization_name); }
