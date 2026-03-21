@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { eventApi, type Event } from '../api/eventApi';
 import { exportToCsv, exportToXlsx } from '../utils/exporters';
+import DOMPurify from 'dompurify';
 
 const STATUS_MAP: Record<string, { label: string; bg: string; color: string }> = {
   attended: { label: 'Đã check-in', bg: '#f0fdf4', color: '#15803d' },
@@ -212,11 +213,30 @@ const EventDetailPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Images Gallery */}
+        {event.images && (() => {
+          let imgs: string[] = [];
+          try {
+             imgs = JSON.parse(event.images);
+          } catch(e) {}
+          if (imgs.length === 0) return null;
+          return (
+            <div className="edp-desc-card">
+              <div className="edp-section-title">Hình ảnh sự kiện</div>
+              <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8 }}>
+                {imgs.map((url, i) => (
+                  <img key={i} src={`http://localhost:5000${url}`} alt="" style={{ height: 160, borderRadius: 8, objectFit: 'cover' }} />
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Description */}
         {event.description && (
           <div className="edp-desc-card">
             <div className="edp-section-title">Mô tả</div>
-            <div className="edp-desc-text">{event.description}</div>
+            <div className="edp-desc-text ql-editor" style={{ padding: 0 }} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(event.description) }} />
           </div>
         )}
 

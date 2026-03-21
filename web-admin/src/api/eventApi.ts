@@ -4,6 +4,7 @@ export type Event = {
   id: number;
   title: string;
   description?: string | null;
+  images?: string | null;
   location: string;
   start_time: string;
   end_time: string;
@@ -42,12 +43,16 @@ export const eventApi = {
     return axiosClient.get(`/events/${id}`);
   },
 
-  createEvent(payload: Omit<Event, 'id'>) {
-    return axiosClient.post('/events', payload);
+  createEvent(payload: FormData) {
+    return axiosClient.post('/events', payload, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
   },
 
-  updateEvent(id: number, payload: Partial<Omit<Event, 'id'>>) {
-    return axiosClient.put(`/events/${id}`, payload);
+  updateEvent(id: number, payload: FormData) {
+    return axiosClient.put(`/events/${id}`, payload, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
   },
 
   deleteEvent(id: number) {

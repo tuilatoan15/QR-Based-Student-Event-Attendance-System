@@ -3,6 +3,7 @@ const { sql, poolPromise } = require('../config/db');
 const createEvent = async ({
   title,
   description,
+  images,
   location,
   start_time,
   end_time,
@@ -17,6 +18,7 @@ const createEvent = async ({
     .request()
     .input('title', sql.NVarChar(255), title)
     .input('description', sql.NVarChar(sql.MAX), description || null)
+    .input('images', sql.NVarChar(sql.MAX), images || null)
     .input('location', sql.NVarChar(255), location)
     .input('start_time', sql.DateTime2, new Date(start_time))
     .input('end_time', sql.DateTime2, new Date(end_time))
@@ -26,8 +28,8 @@ const createEvent = async ({
     .input('google_sheet_id', sql.NVarChar(255), google_sheet_id)
     .input('google_sheet_name', sql.NVarChar(255), google_sheet_name)
     .query(
-      `INSERT INTO events (title, description, location, start_time, end_time, max_participants, category_id, created_by, google_sheet_id, google_sheet_name, is_active, created_at)
-       VALUES (@title, @description, @location, @start_time, @end_time, @max_participants, @category_id, @created_by, @google_sheet_id, @google_sheet_name, 1, SYSUTCDATETIME());
+      `INSERT INTO events (title, description, images, location, start_time, end_time, max_participants, category_id, created_by, google_sheet_id, google_sheet_name, is_active, created_at)
+       VALUES (@title, @description, @images, @location, @start_time, @end_time, @max_participants, @category_id, @created_by, @google_sheet_id, @google_sheet_name, 1, SYSUTCDATETIME());
        SELECT SCOPE_IDENTITY() AS id;`
     );
   return result.recordset[0].id;
@@ -40,7 +42,9 @@ const getAllEvents = async (offset = 0, limit = 10) => {
     .input('offset', sql.Int, offset)
     .input('limit', sql.Int, limit)
     .query(
-      `SELECT e.*, c.name AS category_name
+      `SELECT e.*, c.name AS category_name,
+       (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status != 'cancelled') AS registered_count,
+       (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status = 'attended') AS checked_in_count
        FROM events e
        LEFT JOIN event_categories c ON e.category_id = c.id
        WHERE e.is_active = 1
@@ -62,7 +66,9 @@ const getEventById = async (id) => {
     .request()
     .input('id', sql.Int, id)
     .query(
-      `SELECT e.*, c.name AS category_name
+      `SELECT e.*, c.name AS category_name,
+       (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status != 'cancelled') AS registered_count,
+       (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status = 'attended') AS checked_in_count
        FROM events e
        LEFT JOIN event_categories c ON e.category_id = c.id
        WHERE e.id = @id`
@@ -75,6 +81,7 @@ const updateEvent = async (id, fields) => {
   const req = pool.request().input('id', sql.Int, id);
   if (fields.title != null) req.input('title', sql.NVarChar(255), fields.title);
   if (fields.description != null) req.input('description', sql.NVarChar(sql.MAX), fields.description);
+  if (fields.images !== undefined) req.input('images', sql.NVarChar(sql.MAX), fields.images);
   if (fields.location != null) req.input('location', sql.NVarChar(255), fields.location);
   if (fields.start_time != null) req.input('start_time', sql.DateTime2, new Date(fields.start_time));
   if (fields.end_time != null) req.input('end_time', sql.DateTime2, new Date(fields.end_time));
@@ -86,6 +93,7 @@ const updateEvent = async (id, fields) => {
   const updates = [];
   if (fields.title != null) updates.push('title = @title');
   if (fields.description != null) updates.push('description = @description');
+  if (fields.images !== undefined) updates.push('images = @images');
   if (fields.location != null) updates.push('location = @location');
   if (fields.start_time != null) updates.push('start_time = @start_time');
   if (fields.end_time != null) updates.push('end_time = @end_time');
@@ -114,7 +122,9 @@ const getEventsByOrganizer = async (created_by, offset = 0, limit = 10) => {
     .input('offset', sql.Int, offset)
     .input('limit', sql.Int, limit)
     .query(
-      `SELECT e.*, c.name AS category_name
+      `SELECT e.*, c.name AS category_name,
+       (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status != 'cancelled') AS registered_count,
+       (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status = 'attended') AS checked_in_count
        FROM events e
        LEFT JOIN event_categories c ON e.category_id = c.id
        WHERE e.created_by = @created_by AND e.is_active = 1

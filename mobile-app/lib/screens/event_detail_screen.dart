@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../config/api_config.dart';
 
 import '../models/event.dart';
 import '../models/registration.dart';
@@ -244,7 +248,45 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               children: [
                                 _CardLabel('Mô tả', icon: Icons.info_outline_rounded, color: _accent),
                                 const SizedBox(height: 10),
-                                Text(_event!.description!, style: const TextStyle(fontSize: 14, color: Color(0xFF475569), height: 1.6)),
+                                HtmlWidget(
+                                  _event!.description!,
+                                  onTapUrl: (url) async {
+                                    final u = Uri.parse(url);
+                                    if (await canLaunchUrl(u)) await launchUrl(u);
+                                    return true;
+                                  },
+                                  textStyle: const TextStyle(fontSize: 14, color: Color(0xFF475569), height: 1.6),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+
+                        // Image Gallery
+                        if (_event!.images.isNotEmpty) ...[
+                          _SectionCard(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _CardLabel('Hình ảnh', icon: Icons.photo_library_rounded, color: _accent),
+                                const SizedBox(height: 10),
+                                ListView.separated(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemCount: _event!.images.length,
+                                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                                  itemBuilder: (ctx, idx) {
+                                    return ClipRRect(
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: Image.network(
+                                        '${ApiConfig.baseUrl}${_event!.images[idx]}',
+                                        width: double.infinity,
+                                        fit: BoxFit.fitWidth,
+                                      ),
+                                    );
+                                  },
+                                ),
                               ],
                             ),
                           ),

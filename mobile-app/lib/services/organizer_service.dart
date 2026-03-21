@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import '../models/event.dart';
@@ -43,13 +44,24 @@ class OrganizerService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> createEvent(Map<String, dynamic> body) async {
+  Future<bool> createEvent(Map<String, String> fields, List<String> filePaths) async {
     isLoading = true;
     errorMessage = null;
     notifyListeners();
 
     try {
-      final response = await _api.post('/api/events', body: body, authenticated: true);
+      final files = <http.MultipartFile>[];
+      for (final path in filePaths) {
+        files.add(await http.MultipartFile.fromPath('images', path));
+      }
+
+      final response = await _api.sendMultipart(
+        'POST',
+        '/api/events',
+        fields: fields,
+        files: files,
+        authenticated: true,
+      );
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
 
       if ((response.statusCode == 200 || response.statusCode == 201) && decoded['success'] == true) {
@@ -67,13 +79,28 @@ class OrganizerService extends ChangeNotifier {
     return false;
   }
 
-  Future<bool> updateEvent(int id, Map<String, dynamic> body) async {
+  Future<bool> updateEvent(int id, Map<String, String> fields, List<String> filePaths, List<String> existingImages) async {
     isLoading = true;
     errorMessage = null;
     notifyListeners();
 
     try {
-      final response = await _api.put('/api/events/$id', body: body, authenticated: true);
+      final files = <http.MultipartFile>[];
+      for (final path in filePaths) {
+        files.add(await http.MultipartFile.fromPath('images', path));
+      }
+      
+      if (files.isEmpty) {
+        fields['images'] = jsonEncode(existingImages);
+      }
+
+      final response = await _api.sendMultipart(
+        'PUT',
+        '/api/events/$id',
+        fields: fields,
+        files: files,
+        authenticated: true,
+      );
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (response.statusCode == 200 && decoded['success'] == true) {

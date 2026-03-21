@@ -26,7 +26,7 @@ const EventTable: React.FC<Props> = ({ events, onDelete }) => {
         .et-loc{display:flex;align-items:center;gap:5px;color:#64748b;font-size:13px;}
         .et-time{font-size:12.5px;color:#64748b;white-space:nowrap;}
         .et-max{font-weight:600;color:#0f172a;font-size:13px;}
-        .et-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap;}
+        .et-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:nowrap;}
         .et-btn{display:inline-flex;align-items:center;gap:4px;padding:5px 11px;border-radius:7px;font-size:12px;font-weight:600;text-decoration:none;transition:all .14s;white-space:nowrap;border:none;cursor:pointer;font-family:inherit;}
         .et-btn-edit{background:#eff6ff;color:#1d4ed8;}.et-btn-edit:hover{background:#dbeafe;color:#1e40af;}
         .et-btn-parts{background:#f0f7ff;color:#0284c7;}.et-btn-parts:hover{background:#e0f2fe;color:#0369a1;}
