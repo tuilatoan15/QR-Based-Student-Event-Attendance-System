@@ -23,6 +23,8 @@ const qrService = require('../services/qrService');
 const { successResponse, paginatedSuccessResponse, errorResponse } = require('../utils/response');
 const googleSheetService = require('../services/googleSheetService');
 const { findUserById } = require('../models/userModel');
+const sanitizeHtml = require('sanitize-html');
+const cloudinary = require('../config/cloudinary');
 
 const getEvents = async (req, res, next) => {
   try {
@@ -65,6 +67,19 @@ const createEventHandler = async (req, res, next) => {
   try {
     const { title, description, location, start_time, end_time, max_participants, category_id } = req.body;
 
+    const sanitizedDescription = description ? sanitizeHtml(description) : null;
+    let imagesUrlStr = null;
+    if (req.files && req.files.length > 0) {
+      const uploadPromises = req.files.map(file => {
+        const b64 = Buffer.from(file.buffer).toString('base64');
+        const dataURI = 'data:' + file.mimetype + ';base64,' + b64;
+        return cloudinary.uploader.upload(dataURI, { folder: 'events', resource_type: 'image' });
+      });
+      const results = await Promise.all(uploadPromises);
+      const urls = results.map(r => r.secure_url);
+      imagesUrlStr = JSON.stringify(urls);
+    }
+
     // Create Google Sheet first
     let sheetInfo = null;
     try {
@@ -78,7 +93,8 @@ const createEventHandler = async (req, res, next) => {
     // Create event in database
     const eventId = await createEvent({
       title,
-      description: description || null,
+      description: sanitizedDescription,
+      images: imagesUrlStr,
       location,
       start_time,
       end_time,
@@ -106,7 +122,8 @@ const createEventHandler = async (req, res, next) => {
     const response = {
       id: eventId,
       title,
-      description,
+      description: sanitizedDescription,
+      images: imagesUrlStr ? JSON.parse(imagesUrlStr) : null,
       location,
       start_time,
       end_time,
@@ -144,9 +161,31 @@ const updateEventHandler = async (req, res, next) => {
     }
 
     const { title, description, location, start_time, end_time, max_participants, category_id, is_active } = req.body;
+    
+    let sanitizedDescription = undefined;
+    if (description !== undefined) {
+      sanitizedDescription = description ? sanitizeHtml(description) : null;
+    }
+
+    let imagesUrlStr = undefined;
+    if (req.files && req.files.length > 0) {
+      const uploadPromises = req.files.map(file => {
+        const b64 = Buffer.from(file.buffer).toString('base64');
+        const dataURI = 'data:' + file.mimetype + ';base64,' + b64;
+        return cloudinary.uploader.upload(dataURI, { folder: 'events', resource_type: 'image' });
+      });
+      const results = await Promise.all(uploadPromises);
+      const urls = results.map(r => r.secure_url);
+      imagesUrlStr = JSON.stringify(urls);
+    } else if (req.body.images !== undefined) {
+      // In case no new images are uploaded, but we still pass existing ones
+      imagesUrlStr = req.body.images;
+    }
+
     const fields = {};
     if (title != null) fields.title = title;
-    if (description != null) fields.description = description;
+    if (sanitizedDescription !== undefined) fields.description = sanitizedDescription;
+    if (imagesUrlStr !== undefined) fields.images = imagesUrlStr;
     if (location != null) fields.location = location;
     if (start_time != null) fields.start_time = start_time;
     if (end_time != null) fields.end_time = end_time;

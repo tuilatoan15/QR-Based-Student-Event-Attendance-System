@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const dotenv = require('dotenv');
+const path = require('path');
 
 dotenv.config();
 
@@ -24,7 +25,6 @@ const app = express();
 
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(express.json());
-app.use('/uploads', express.static('uploads'));
 app.use(
   cors({
     origin: 'http://localhost:5173',

@@ -180,4 +180,36 @@ class ApiService {
     final streamedResponse = await request.send();
     return http.Response.fromStream(streamedResponse);
   }
+
+  Future<http.Response> sendMultipart(
+    String method,
+    String path, {
+    Map<String, String>? fields,
+    List<http.MultipartFile>? files,
+    bool? authenticated,
+  }) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final request = http.MultipartRequest(method.toUpperCase(), uri);
+
+    final needsAuth = authenticated ?? _isProtectedEndpoint(path);
+    if (needsAuth) {
+      final token = await _getToken();
+      if (token != null && token.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+    }
+
+    request.headers['X-Client'] = 'mobile-app';
+
+    if (fields != null) {
+      request.fields.addAll(fields);
+    }
+
+    if (files != null) {
+      request.files.addAll(files);
+    }
+
+    final streamedResponse = await request.send();
+    return http.Response.fromStream(streamedResponse);
+  }
 }

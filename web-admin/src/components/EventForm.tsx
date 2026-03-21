@@ -1,17 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 import type { Event } from '../api/eventApi';
+import axiosClient from '../api/axiosClient';
 
 type Props = {
   initial?: Partial<Event>;
-  onSubmit: (values: {
-    title: string;
-    description?: string;
-    location: string;
-    start_time: string;
-    end_time: string;
-    max_participants: number;
-    category_id?: number | null;
-  }) => Promise<void>;
+  onSubmit: (values: FormData) => Promise<void>;
 };
 
 const EventForm: React.FC<Props> = ({ initial, onSubmit }) => {
@@ -22,27 +17,131 @@ const EventForm: React.FC<Props> = ({ initial, onSubmit }) => {
   const [endTime, setEndTime] = useState(initial?.end_time ? initial.end_time.substring(0, 16) : '');
   const [maxParticipants, setMaxParticipants] = useState(initial?.max_participants ?? 50);
   const [categoryId, setCategoryId] = useState<number | ''>(initial?.category_id ?? '');
+  
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const quillRef = useRef<ReactQuill>(null);
+
+  // Parse existing images if any
+  const [existingImages, setExistingImages] = useState<string[]>([]);
+  useEffect(() => {
+    if (initial?.images) {
+      try {
+        setExistingImages(JSON.parse(initial.images));
+      } catch (e) {}
+    }
+  }, [initial?.images]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      setSelectedFiles(prev => {
+        const newFiles = [...prev, ...files];
+        if (newFiles.length + existingImages.length > 10) {
+          alert('Tối đa 10 hình ảnh');
+          return prev;
+        }
+        
+        const urls = files.map(file => URL.createObjectURL(file));
+        setPreviewUrls(previewPrev => [...previewPrev, ...urls]);
+        return newFiles;
+      });
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    setPreviewUrls(prev => prev.filter((_, i) => i !== index));
+  };
+  
+  const removeExistingImage = (index: number) => {
+    setExistingImages(prev => prev.filter((_, i) => i !== index));
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
+    
     try {
-      await onSubmit({
-        title, description, location,
-        start_time: new Date(startTime).toISOString(),
-        end_time: new Date(endTime).toISOString(),
-        max_participants: maxParticipants,
-        category_id: categoryId === '' ? undefined : Number(categoryId),
-      });
+      const formData = new FormData();
+      formData.append('title', title);
+      formData.append('location', location);
+      formData.append('start_time', new Date(startTime).toISOString());
+      formData.append('end_time', new Date(endTime).toISOString());
+      formData.append('max_participants', maxParticipants.toString());
+      if (categoryId !== '') formData.append('category_id', categoryId.toString());
+      
+      if (description) {
+        formData.append('description', description);
+      }
+      
+      // Append files
+      if (selectedFiles.length > 0) {
+        selectedFiles.forEach(file => {
+          formData.append('images', file);
+        });
+      } else if (existingImages.length > 0) {
+        formData.append('images', JSON.stringify(existingImages));
+      } else {
+        // If they cleared all images, we send an empty array string so backend knows to clear.
+        formData.append('images', '[]');
+      }
+
+      await onSubmit(formData);
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Lưu thất bại. Vui lòng thử lại.');
     } finally {
       setSubmitting(false);
     }
   };
+
+  const imageHandler = () => {
+    const input = document.createElement('input');
+    input.setAttribute('type', 'file');
+    input.setAttribute('accept', 'image/jpeg, image/png, image/jpg');
+    input.click();
+
+    input.onchange = async () => {
+      const file = input.files ? input.files[0] : null;
+      if (!file) return;
+
+      const fd = new FormData();
+      fd.append('image', file);
+      try {
+        const res = await axiosClient.post('/upload/editor-image', fd, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        const url = 'http://localhost:5000' + res.data.url;
+        
+        const quill = quillRef.current?.getEditor();
+        if (quill) {
+          const range = quill.getSelection(true);
+          quill.insertEmbed(range.index, 'image', url);
+          quill.setSelection(range.index + 1, 0);
+        }
+      } catch (e) {
+        console.error('Image upload failed', e);
+        alert('Không thể tải ảnh lên. Vui lòng thử lại.');
+      }
+    };
+  };
+
+  const modules = useMemo(() => ({
+    toolbar: {
+      container: [
+        ['bold', 'italic', 'underline', 'strike'],
+        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+        ['link', 'image'],
+        ['clean']
+      ],
+      handlers: { image: imageHandler }
+    }
+  }), []);
 
   return (
     <>
@@ -73,7 +172,18 @@ const EventForm: React.FC<Props> = ({ initial, onSubmit }) => {
           background:#fff;border-color:#0ea5e9;
           box-shadow:0 0 0 3px rgba(14,165,233,.15);
         }
-        .ef-textarea{resize:vertical;min-height:88px;}
+        .ef-file{font-size:13px;padding:8px;background:#fff;border:1.5px dashed #cbd5e1;border-radius:9px;cursor:pointer;color:#475569;}
+        .ef-preview-grid{display:flex;gap:12px;margin-top:12px;flex-wrap:wrap;}
+        .ef-preview-item{position:relative;width:80px;height:80px;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;}
+        .ef-preview-img{width:100%;height:100%;object-fit:cover;}
+        .ef-preview-rm{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;opacity:0;transition:opacity .15s;}
+        .ef-preview-item:hover .ef-preview-rm{opacity:1;}
+        .ef-preview-rm:hover{background:#ef4444;}
+        
+        .ql-container{font-family:inherit;font-size:14px;background:#fff;border-bottom-left-radius:9px;border-bottom-right-radius:9px;}
+        .ql-toolbar{border-top-left-radius:9px;border-top-right-radius:9px;background:#f8fafc;}
+        .ql-editor{min-height:160px;}
+
         .ef-footer{display:flex;align-items:center;gap:12px;padding-top:4px;}
         .ef-submit{display:inline-flex;align-items:center;gap:8px;padding:11px 24px;background:linear-gradient(135deg,#38bdf8,#0284c7);color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .15s;box-shadow:0 3px 12px rgba(14,165,233,.35);}
         .ef-submit:hover:not(:disabled){opacity:.9;transform:translateY(-1px);box-shadow:0 5px 18px rgba(14,165,233,.45);}
@@ -100,7 +210,40 @@ const EventForm: React.FC<Props> = ({ initial, onSubmit }) => {
 
           <div className="ef-field ef-full">
             <label className="ef-label">Mô tả <span className="ef-label-hint">(tuỳ chọn)</span></label>
-            <textarea className="ef-textarea" placeholder="Mô tả ngắn về sự kiện..." value={description} onChange={e=>setDescription(e.target.value)}/>
+            <ReactQuill 
+              ref={quillRef}
+              theme="snow" 
+              value={description} 
+              onChange={setDescription} 
+              modules={modules}
+              placeholder="Nhập nội dung chi tiết sự kiện..."
+            />
+          </div>
+          
+          <div className="ef-field ef-full">
+            <label className="ef-label">Hình ảnh <span className="ef-label-hint">(tối đa 10 ảnh)</span></label>
+            <input 
+              type="file" 
+              multiple 
+              accept="image/jpeg, image/png, image/jpg" 
+              onChange={handleFileChange}
+              className="ef-file"
+              disabled={selectedFiles.length + existingImages.length >= 10}
+            />
+            <div className="ef-preview-grid">
+              {existingImages.map((url, i) => (
+                <div key={'ex_'+i} className="ef-preview-item">
+                  <img src={"http://localhost:5000" + url} className="ef-preview-img" alt="Existing" />
+                  <button type="button" className="ef-preview-rm" onClick={() => removeExistingImage(i)}>✕</button>
+                </div>
+              ))}
+              {previewUrls.map((url, i) => (
+                <div key={'pr_'+i} className="ef-preview-item">
+                  <img src={url} className="ef-preview-img" alt="Preview" />
+                  <button type="button" className="ef-preview-rm" onClick={() => removeFile(i)}>✕</button>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="ef-field ef-full">

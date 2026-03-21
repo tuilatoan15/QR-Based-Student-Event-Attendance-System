@@ -1,13 +1,20 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:html_editor_enhanced/html_editor.dart';
+import 'package:http/http.dart' as http;
+import 'dart:io';
+
+import '../../config/api_config.dart';
 import '../../services/organizer_service.dart';
 import '../../models/event.dart';
 
 class OrganizerEventFormScreen extends StatefulWidget {
   const OrganizerEventFormScreen({super.key, this.event});
-  final Event? event; // null = tạo mới, non-null = sửa
+  final Event? event;
 
   @override
   State<OrganizerEventFormScreen> createState() => _OrganizerEventFormScreenState();
@@ -16,33 +23,56 @@ class OrganizerEventFormScreen extends StatefulWidget {
 class _OrganizerEventFormScreenState extends State<OrganizerEventFormScreen> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _titleCtrl;
-  late TextEditingController _descCtrl;
   late TextEditingController _locationCtrl;
   late TextEditingController _maxCtrl;
   DateTime? _startTime;
   DateTime? _endTime;
 
+  final HtmlEditorController _htmlCtrl = HtmlEditorController();
+  
+  final ImagePicker _picker = ImagePicker();
+  List<File> _selectedFiles = [];
+  List<String> _existingImages = [];
+
   bool get _isEditing => widget.event != null;
+  bool _submitting = false;
 
   @override
   void initState() {
     super.initState();
     final e = widget.event;
     _titleCtrl = TextEditingController(text: e?.title ?? '');
-    _descCtrl = TextEditingController(text: e?.description ?? '');
     _locationCtrl = TextEditingController(text: e?.location ?? '');
     _maxCtrl = TextEditingController(text: e?.maxParticipants.toString() ?? '50');
     _startTime = e?.startTime;
     _endTime = e?.endTime;
+    
+    if (e != null && e.images.isNotEmpty) {
+      _existingImages = List.from(e.images);
+    }
   }
 
   @override
   void dispose() {
     _titleCtrl.dispose();
-    _descCtrl.dispose();
     _locationCtrl.dispose();
     _maxCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImages() async {
+    final picked = await _picker.pickMultiImage();
+    if (picked.isNotEmpty) {
+      if (_selectedFiles.length + _existingImages.length + picked.length > 10) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tối đa 10 hình ảnh')));
+        }
+        return;
+      }
+      setState(() {
+        _selectedFiles.addAll(picked.map((x) => File(x.path)));
+      });
+    }
   }
 
   Future<void> _selectDateTime(bool isStart) async {
@@ -62,36 +92,43 @@ class _OrganizerEventFormScreenState extends State<OrganizerEventFormScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_startTime == null || _endTime == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng chọn thời gian bắt đầu và kết thúc'), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng chọn thời gian'), backgroundColor: Colors.red));
       return;
     }
     if (_endTime!.isBefore(_startTime!)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Thời gian kết thúc phải sau thời gian bắt đầu'), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Kết thúc phải sau bắt đầu'), backgroundColor: Colors.red));
       return;
     }
 
-    final body = {
+    setState(() => _submitting = true);
+
+    String htmlDesc = await _htmlCtrl.getText();
+
+    final fields = <String, String>{
       'title': _titleCtrl.text.trim(),
-      'description': _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+      'description': htmlDesc,
       'location': _locationCtrl.text.trim(),
       'start_time': _startTime!.toIso8601String(),
       'end_time': _endTime!.toIso8601String(),
-      'max_participants': int.tryParse(_maxCtrl.text) ?? 50,
+      'max_participants': (int.tryParse(_maxCtrl.text) ?? 50).toString(),
     };
+
+    final filePaths = _selectedFiles.map((e) => e.path).toList();
 
     final service = context.read<OrganizerService>();
     bool success;
     if (_isEditing) {
-      success = await service.updateEvent(widget.event!.id, body);
+      success = await service.updateEvent(widget.event!.id, fields, filePaths, _existingImages);
     } else {
-      success = await service.createEvent(body);
+      success = await service.createEvent(fields, filePaths);
     }
 
     if (mounted) {
+      setState(() => _submitting = false);
       if (success) {
         if (Navigator.canPop(context)) Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(_isEditing ? 'Đã cập nhật sự kiện' : 'Đã tạo sự kiện thành công'),
+          content: Text(_isEditing ? 'Đã cập nhật sự kiện' : 'Đã tạo sự kiện'),
           backgroundColor: Colors.green,
         ));
       } else {
@@ -103,11 +140,36 @@ class _OrganizerEventFormScreenState extends State<OrganizerEventFormScreen> {
     }
   }
 
+  Future<void> _handleCustomImageUpload(FileUpload file) async {
+    // Custom logic to upload the isolated editor image inline to /editor-image endpoint
+    try {
+      if (file.base64 == null) return;
+      final String b64 = file.base64!.split(",").last;
+      final bytes = base64Decode(b64);
+
+      final request = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/api/upload/editor-image'));
+      request.files.add(http.MultipartFile.fromBytes('image', bytes, filename: file.name ?? 'image.png'));
+      final res = await request.send();
+      final resData = jsonDecode(await res.stream.bytesToString());
+      
+      if (resData['success'] == true) {
+        final url = '${ApiConfig.baseUrl}${resData["url"]}';
+        _htmlCtrl.insertNetworkImage(url, filename: file.name ?? '');
+      } else {
+        throw Exception();
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lỗi upload ảnh văn bản'), backgroundColor: Colors.red));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final service = context.watch<OrganizerService>();
     final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
-    const accent = Color(0xFF6C63FF);
+    final isLoading = _submitting || service.isLoading;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5FF),
@@ -123,13 +185,66 @@ class _OrganizerEventFormScreenState extends State<OrganizerEventFormScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _Field(controller: _titleCtrl, label: 'Tên sự kiện *', hint: 'Ví dụ: Workshop Flutter 2026', icon: Icons.event_rounded,
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Vui lòng nhập tên sự kiện' : null),
+              _Field(controller: _titleCtrl, label: 'Tên sự kiện *', hint: 'Ví dụ: Workshop Flutter', icon: Icons.event_rounded,
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'Bắt buộc nhập' : null),
               const SizedBox(height: 16),
-              _Field(controller: _descCtrl, label: 'Mô tả', hint: 'Nội dung, chủ đề, thông tin cần biết...', icon: Icons.description_outlined, maxLines: 3),
+              
+              const Text('Mô tả (HTML)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF374151))),
+              const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE0E0E0)), borderRadius: BorderRadius.circular(12), color: Colors.white),
+                child: HtmlEditor(
+                  controller: _htmlCtrl,
+                  htmlEditorOptions: HtmlEditorOptions(
+                    hint: "Nhập nội dung sự kiện...",
+                    initialText: widget.event?.description ?? '',
+                  ),
+                  htmlToolbarOptions: const HtmlToolbarOptions(
+                    toolbarPosition: ToolbarPosition.aboveEditor,
+                    renderSeparatorWidget: false,
+                    defaultToolbarButtons: [
+                       StyleButtons(),
+                       FontSettingButtons(),
+                       ColorButtons(),
+                       ListButtons(),
+                       InsertButtons(video: false, audio: false, hr: false, table: false),
+                    ]
+                  ),
+                  otherOptions: const OtherOptions(height: 300),
+                  callbacks: Callbacks(
+                    onImageUpload: (FileUpload file) async {
+                      await _handleCustomImageUpload(file);
+                    }
+                  ),
+                ),
+              ),
               const SizedBox(height: 16),
-              _Field(controller: _locationCtrl, label: 'Địa điểm *', hint: 'Phòng lab, hội trường...', icon: Icons.location_on_outlined,
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Vui lòng nhập địa điểm' : null),
+              
+              const Text('Hình ảnh Gallery', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF374151))),
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: _pickImages,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE0E0E0), style: BorderStyle.solid), borderRadius: BorderRadius.circular(12), color: Colors.white),
+                  child: const Center(child: Text('+ Thêm ảnh dự phòng (Tối đa 10 ảnh)', style: TextStyle(color: Colors.blueAccent))),
+                ),
+              ),
+              if (_existingImages.isNotEmpty || _selectedFiles.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 10, runSpacing: 10,
+                  children: [
+                    ..._existingImages.asMap().entries.map((e) => _buildPreviewUrl(e.value, e.key)),
+                    ..._selectedFiles.asMap().entries.map((e) => _buildPreviewFile(e.value, e.key)),
+                  ],
+                ),
+              ],
+              
+              const SizedBox(height: 16),
+              _Field(controller: _locationCtrl, label: 'Địa điểm *', hint: 'Phòng lab...', icon: Icons.location_on_outlined,
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'Bắt buộc nhập' : null),
               const SizedBox(height: 16),
               _Field(controller: _maxCtrl, label: 'Số người tối đa *', hint: '50', icon: Icons.people_rounded, keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -153,9 +268,9 @@ class _OrganizerEventFormScreenState extends State<OrganizerEventFormScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: service.isLoading ? null : _submit,
-                  style: ElevatedButton.styleFrom(backgroundColor: accent, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                  child: service.isLoading
+                  onPressed: isLoading ? null : _submit,
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                  child: isLoading
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                       : Text(_isEditing ? 'Cập nhật sự kiện' : 'Tạo sự kiện', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
@@ -164,6 +279,34 @@ class _OrganizerEventFormScreenState extends State<OrganizerEventFormScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildPreviewUrl(String url, int index) {
+    return Stack(
+      children: [
+        Container(width: 70, height: 70, decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade300)),
+          child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network('${ApiConfig.baseUrl}$url', fit: BoxFit.cover)),
+        ),
+        Positioned(top: 2, right: 2, child: InkWell(
+          onTap: () => setState(() => _existingImages.removeAt(index)),
+          child: Container(decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle), padding: const EdgeInsets.all(4), child: const Icon(Icons.close, size: 12, color: Colors.white)),
+        )),
+      ],
+    );
+  }
+
+  Widget _buildPreviewFile(File file, int index) {
+    return Stack(
+      children: [
+        Container(width: 70, height: 70, decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade300)),
+          child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(file, fit: BoxFit.cover)),
+        ),
+        Positioned(top: 2, right: 2, child: InkWell(
+          onTap: () => setState(() => _selectedFiles.removeAt(index)),
+          child: Container(decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle), padding: const EdgeInsets.all(4), child: const Icon(Icons.close, size: 12, color: Colors.white)),
+        )),
+      ],
     );
   }
 }

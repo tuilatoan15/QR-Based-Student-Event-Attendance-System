@@ -1,7 +1,10 @@
+import 'dart:convert';
+
 class Event {
   final int id;
   final String title;
   final String? description;
+  final List<String> images;
   final String location;
   final DateTime startTime;
   final DateTime endTime;
@@ -25,9 +28,20 @@ class Event {
     this.googleSheetId,
     this.googleSheetName,
     this.googleSheetUrl,
+    this.images = const [],
   });
 
   factory Event.fromJson(Map<String, dynamic> json) {
+    List<String> parsedImages = [];
+    if (json['images'] != null && json['images'] is String) {
+      try {
+        final List<dynamic> decoded = jsonDecode(json['images']);
+        parsedImages = decoded.map((e) => e.toString()).toList();
+      } catch (e) {
+        // ignored
+      }
+    }
+    
     return Event(
       id: json['id'] as int,
       title: json['title'] as String? ?? '',
@@ -41,6 +55,7 @@ class Event {
       googleSheetId: json['google_sheet_id'] as String?,
       googleSheetName: json['google_sheet_name'] as String?,
       googleSheetUrl: json['google_sheet_url'] as String?,
+      images: parsedImages,
     );
   }
 
