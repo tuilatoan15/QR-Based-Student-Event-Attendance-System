@@ -16,6 +16,7 @@ class Participant {
   });
 
   bool get isCheckedIn => status == 'checked_in';
+  bool get isCancelled => status == 'cancelled';
 
   factory Participant.fromJson(Map<String, dynamic> json) {
     return Participant(

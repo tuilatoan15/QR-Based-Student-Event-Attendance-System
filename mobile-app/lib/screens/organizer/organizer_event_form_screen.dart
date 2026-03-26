@@ -153,7 +153,7 @@ class _OrganizerEventFormScreenState extends State<OrganizerEventFormScreen> {
       final resData = jsonDecode(await res.stream.bytesToString());
       
       if (resData['success'] == true) {
-        final url = '${ApiConfig.baseUrl}${resData["url"]}';
+        final url = ApiConfig.resolveMediaUrl(resData["url"].toString());
         _htmlCtrl.insertNetworkImage(url, filename: file.name ?? '');
       } else {
         throw Exception();
@@ -286,7 +286,13 @@ class _OrganizerEventFormScreenState extends State<OrganizerEventFormScreen> {
     return Stack(
       children: [
         Container(width: 70, height: 70, decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade300)),
-          child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network('${ApiConfig.baseUrl}$url', fit: BoxFit.cover)),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(
+              ApiConfig.resolveMediaUrl(url),
+              fit: BoxFit.cover,
+            ),
+          ),
         ),
         Positioned(top: 2, right: 2, child: InkWell(
           onTap: () => setState(() => _existingImages.removeAt(index)),

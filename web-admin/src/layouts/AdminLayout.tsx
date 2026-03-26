@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 
@@ -7,7 +7,7 @@ const AdminLayout: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed] = useState(false);
 
   const navItems = [
     {
@@ -95,19 +95,20 @@ const AdminLayout: React.FC = () => {
         /* Logo row */
         .al-logo{
           display:flex;align-items:center;gap:10px;
-          padding:17px 14px 15px;
+          padding:0 14px;
           border-bottom:1px solid #e0eeff;
-          min-height:60px;
+          height:60px;
+          text-decoration:none;
         }
         .al-logo-icon{
-          width:90px;height:90px;flex-shrink:0;
+          width:36px;height:36px;flex-shrink:0;
           background:linear-gradient(135deg,#38bdf8,#0284c7);
           border-radius:50%;display:flex;align-items:center;
           justify-content:center;
           box-shadow:0 2px 8px rgba(14,165,233,0.35);
         }
         .al-logo-text{
-          font-size:14.5px;font-weight:700;color:#0f172a;
+          font-size:16px;font-weight:700;color:#0f172a;
           white-space:nowrap;flex:1;letter-spacing:-0.3px;
         }
         .al-toggle{
@@ -185,7 +186,7 @@ const AdminLayout: React.FC = () => {
           padding:0 24px;position:sticky;top:0;z-index:30;flex-shrink:0;
           box-shadow:0 1px 6px rgba(14,165,233,0.07);
         }
-        .al-page-title{font-size:16px;font-weight:700;color:#0f172a;letter-spacing:-0.3px;}
+        .al-page-title{font-size:22px;font-weight:700;color:#0f172a;letter-spacing:-0.3px;}
         .al-topbar-right{display:flex;align-items:center;gap:12px;}
         .al-status{
           display:flex;align-items:center;gap:6px;font-size:12px;
@@ -215,7 +216,7 @@ const AdminLayout: React.FC = () => {
         }
 
         /* PAGE */
-        .al-page{flex:1;padding:28px;overflow-y:auto;}
+        .al-page{flex:1;padding:20px 24px;overflow-y:auto;}
 
         @media(max-width:768px){
           .al-status{display:none;}
@@ -227,18 +228,18 @@ const AdminLayout: React.FC = () => {
       <div className="al-root">
         {/* Sidebar */}
         <aside className="al-sidebar">
-          <div className="al-logo">
+          <Link to="/" className="al-logo">
             <div className="al-logo-icon">
               <img src="/assets/logo/logo.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
             </div>
             {!collapsed && <span className="al-logo-text">QR Events</span>}
-            <button className="al-toggle" onClick={() => setCollapsed(!collapsed)} title={collapsed ? 'Mở rộng' : 'Thu gọn'}>
+            {/* <button className="al-toggle" onClick={() => setCollapsed(!collapsed)} title={collapsed ? 'Mở rộng' : 'Thu gọn'}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={14} height={14}
                 style={{transform: collapsed ? 'rotate(180deg)' : 'none', transition:'transform .2s'}}>
                 <path d="M15 18l-6-6 6-6"/>
               </svg>
-            </button>
-          </div>
+            </button> */}
+          </Link>
 
           <nav className="al-nav">
             {navItems.map((item) => (

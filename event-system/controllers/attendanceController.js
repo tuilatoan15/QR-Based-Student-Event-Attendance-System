@@ -38,6 +38,10 @@ const scanQr = async (req, res, next) => {
       return errorResponse(res, 404, 'Invalid QR code');
     }
 
+    if (registration.status === REGISTRATION_STATUS.CANCELLED) {
+      return errorResponse(res, 400, 'Sinh viên này đã huỷ đăng ký sự kiện');
+    }
+
     // NEW: Check if the organizer has permission for this event
     const eventDetails = await getEventById(registration.event_id);
     if (!eventDetails) {
@@ -100,7 +104,9 @@ const scanQr = async (req, res, next) => {
         .input('student_id', sql.Int, registration.user_id)
         .input('notif_title', sql.NVarChar(255), 'Điểm danh thành công')
         .input('notif_msg', sql.NVarChar(sql.MAX), 'Bạn đã điểm danh thành công sự kiện: ' + registration.event_title)
-        .query(`INSERT INTO notifications (user_id, title, message) VALUES (@student_id, @notif_title, @notif_msg)`);
+        .input('notif_type', sql.NVarChar(50), 'checkin')
+        .input('event_id', sql.Int, registration.event_id)
+        .query(`INSERT INTO notifications (user_id, title, message, [type], event_id) VALUES (@student_id, @notif_title, @notif_msg, @notif_type, @event_id)`);
 
       // Commit transaction if all operations succeed
       await transaction.commit();
@@ -252,6 +258,10 @@ const manualCheckinByStudent = async (req, res, next) => {
       return errorResponse(res, 404, `Kh\u00f4ng t\u00ecm th\u1ea5y \u0111\u0103ng k\u00fd cho MSSV: ${student_code} t\u1ea1i s\u1ef1 ki\u1ec7n n\u00e0y`);
     }
 
+    if (reg.status === 'cancelled') {
+       return errorResponse(res, 400, 'Sinh viên này đã huỷ đăng ký sự kiện');
+    }
+
     if (reg.status === 'attended') {
       const existingAtt = await pool.request()
         .input('reg_id', sql.Int, reg.registration_id)
@@ -291,9 +301,11 @@ const manualCheckinByStudent = async (req, res, next) => {
       // Notification
       await request
         .input('student_id', sql.Int, reg.user_id)
-        .input('notif_title', sql.NVarChar(255), '\u0110i\u1ec3m danh th\u00e0nh c\u00f4ng')
-        .input('notif_msg', sql.NVarChar(sql.MAX), 'B\u1ea1n \u0111\u00e3 \u0111i\u1ec3m danh th\u00e0nh c\u00f4ng s\u1ef1 ki\u1ec7n: ' + reg.event_title)
-        .query('INSERT INTO notifications (user_id, title, message) VALUES (@student_id, @notif_title, @notif_msg)');
+        .input('notif_title', sql.NVarChar(255), 'Điểm danh thành công')
+        .input('notif_msg', sql.NVarChar(sql.MAX), 'Bạn đã điểm danh thành công sự kiện: ' + reg.event_title)
+        .input('notif_type', sql.NVarChar(50), 'checkin')
+        .input('event_id', sql.Int, reg.event_id || event_id)
+        .query('INSERT INTO notifications (user_id, title, message, [type], event_id) VALUES (@student_id, @notif_title, @notif_msg, @notif_type, @event_id)');
 
       await transaction.commit();
 

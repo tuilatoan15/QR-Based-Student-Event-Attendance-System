@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/event_service.dart';
+import '../../services/notification_service.dart';
+import '../../services/organizer_service.dart';
 import '../../services/user_service.dart';
 import '../../widgets/primary_button.dart';
 
@@ -256,7 +259,15 @@ class _OrganizerProfileScreenState extends State<OrganizerProfileScreen> {
                         else
                           OutlinedButton.icon(
                             onPressed: () async {
+                              // Clear all data
+                              if (context.mounted) {
+                                context.read<EventService>().clearData();
+                                context.read<NotificationService>().clearData();
+                                context.read<OrganizerService>().clearData();
+                              }
+                              
                               await context.read<AuthService>().logout();
+                              
                               if (context.mounted) {
                                 Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
                               }

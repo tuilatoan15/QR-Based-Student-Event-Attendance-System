@@ -1,13 +1,20 @@
 import 'package:flutter/foundation.dart';
 
 class ApiConfig {
+  static const String _overrideBaseUrl = String.fromEnvironment('API_BASE_URL');
+
   static String get baseUrl {
+    if (_overrideBaseUrl.isNotEmpty) {
+      return _overrideBaseUrl;
+    }
+
     if (kIsWeb) {
       return 'http://localhost:5000';
     }
 
-    // Android emulator
-    return 'http://10.0.2.2:5000';
+    // Default to the current LAN IP of the development machine so
+    // physical Android devices on the same Wi-Fi can reach the backend.
+    return 'http://10.230.241.37:5000';
   }
 
   static String loginUrl() => '$baseUrl/api/auth/login';
@@ -23,4 +30,28 @@ class ApiConfig {
   static String eventAttendanceUrl(int id) =>
       '$baseUrl/api/attendance/event/$id';
   static String uploadAvatarUrl() => '$baseUrl/api/upload/avatar';
+
+  static String resolveMediaUrl(String rawUrl) {
+    var url = rawUrl.trim();
+
+    if (url.startsWith('"') && url.endsWith('"') && url.length >= 2) {
+      url = url.substring(1, url.length - 1);
+    }
+
+    url = url.replaceAll('\\/', '/').trim();
+
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+
+    if (url.startsWith('//')) {
+      return 'https:$url';
+    }
+
+    if (url.startsWith('/')) {
+      return '$baseUrl$url';
+    }
+
+    return '$baseUrl/$url';
+  }
 }

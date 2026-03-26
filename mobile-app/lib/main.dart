@@ -48,7 +48,7 @@ class SmartEventAttendanceApp extends StatelessWidget {
           create: (_) => OrganizerService(),
         ),
         ChangeNotifierProvider<NotificationService>(
-          create: (_) => NotificationService(),
+          create: (_) => NotificationService()..initialize(),
         ),
         ChangeNotifierProvider<UserService>(
           create: (_) => UserService(),
@@ -261,7 +261,12 @@ class _AppRouter extends StatelessWidget {
                     ),
                     const SizedBox(height: 32),
                     OutlinedButton.icon(
-                      onPressed: () => authService.logout(),
+                      onPressed: () {
+                        context.read<EventService>().clearData();
+                        context.read<NotificationService>().clearData();
+                        context.read<OrganizerService>().clearData();
+                        authService.logout();
+                      },
                       icon: const Icon(Icons.logout_rounded),
                       label: const Text('Đăng xuất'),
                     ),
@@ -284,4 +289,4 @@ class _AppRouter extends StatelessWidget {
   }
 }
 
-
+

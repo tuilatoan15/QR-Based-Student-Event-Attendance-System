@@ -17,7 +17,7 @@ class _OrganizerAttendanceScreenState extends State<OrganizerAttendanceScreen> {
   Event? _selectedEvent;
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchQuery = '';
-  String _filterStatus = 'all'; // 'all', 'checkedIn', 'notCheckedIn'
+  String _filterStatus = 'all'; // 'all', 'checkedIn', 'notCheckedIn', 'cancelled'
 
   @override
   void initState() {
@@ -84,12 +84,14 @@ class _OrganizerAttendanceScreenState extends State<OrganizerAttendanceScreen> {
 
     // Calculate total counts based on search (regardless of status filter)
     final checkedInCount = searched.where((p) => p.isCheckedIn).length;
-    final notCheckedInCount = searched.where((p) => !p.isCheckedIn).length;
+    final cancelledCount = searched.where((p) => p.isCancelled).length;
+    final notCheckedInCount = searched.where((p) => !p.isCheckedIn && !p.isCancelled).length;
 
     // 2. Status filter
     final filtered = searched.where((p) {
       if (_filterStatus == 'checkedIn' && !p.isCheckedIn) return false;
-      if (_filterStatus == 'notCheckedIn' && p.isCheckedIn) return false;
+      if (_filterStatus == 'notCheckedIn' && (p.isCheckedIn || p.isCancelled)) return false;
+      if (_filterStatus == 'cancelled' && !p.isCancelled) return false;
       return true;
     }).toList();
 
@@ -184,7 +186,7 @@ class _OrganizerAttendanceScreenState extends State<OrganizerAttendanceScreen> {
                     ),
                     const SizedBox(width: 8),
                     _StatBadge(
-                      label: 'Đã điểm danh', 
+                      label: 'Đã check-in', 
                       count: checkedInCount, 
                       color: const Color(0xFF16A34A),
                       isSelected: _filterStatus == 'checkedIn',
@@ -192,11 +194,19 @@ class _OrganizerAttendanceScreenState extends State<OrganizerAttendanceScreen> {
                     ),
                     const SizedBox(width: 8),
                     _StatBadge(
-                      label: 'Chưa điểm danh', 
+                      label: 'Chưa ĐD', 
                       count: notCheckedInCount, 
                       color: const Color(0xFFF59E0B),
                       isSelected: _filterStatus == 'notCheckedIn',
                       onTap: () => setState(() => _filterStatus = 'notCheckedIn'),
+                    ),
+                    const SizedBox(width: 8),
+                    _StatBadge(
+                      label: 'Đã hủy', 
+                      count: cancelledCount, 
+                      color: const Color(0xFFEF4444),
+                      isSelected: _filterStatus == 'cancelled',
+                      onTap: () => setState(() => _filterStatus = 'cancelled'),
                     ),
                   ],
                 ),
@@ -377,7 +387,24 @@ class _ParticipantCard extends StatelessWidget {
           ),
 
           // Status badge / Manual checkin button
-          if (!checkedIn && participant.studentCode != null && participant.studentCode!.isNotEmpty)
+          if (participant.isCancelled)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFFEE2E2)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.cancel_rounded, size: 13, color: Color(0xFFEF4444)),
+                  SizedBox(width: 4),
+                  Text('Đã hủy', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFFEF4444))),
+                ],
+              ),
+            )
+          else if (!checkedIn && participant.studentCode != null && participant.studentCode!.isNotEmpty)
             GestureDetector(
               onTap: onManualCheckIn,
               child: Container(

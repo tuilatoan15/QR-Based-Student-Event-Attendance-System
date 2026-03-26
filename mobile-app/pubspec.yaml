@@ -21,6 +21,7 @@ dependencies:
   html_editor_enhanced: ^2.7.1
   flutter_widget_from_html_core: ^0.16.1
   url_launcher: ^6.3.2
+  flutter_local_notifications: ^17.2.2
 
 dev_dependencies:
   flutter_test:

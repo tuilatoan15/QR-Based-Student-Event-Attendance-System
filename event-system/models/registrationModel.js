@@ -169,6 +169,14 @@ const hasAttendanceForRegistration = async (registration_id) => {
   return result.recordset.length > 0;
 };
 
+const deleteAttendanceByRegistrationId = async (registration_id) => {
+  const pool = await poolPromise;
+  await pool
+    .request()
+    .input('registration_id', sql.Int, registration_id)
+    .query('DELETE FROM attendances WHERE registration_id = @registration_id');
+};
+
 module.exports = {
   REGISTRATION_STATUS,
   createRegistration,
@@ -180,5 +188,6 @@ module.exports = {
   getRegistrationsForEvent,
   getAttendancesForEvent,
   insertAttendance,
-  hasAttendanceForRegistration
+  hasAttendanceForRegistration,
+  deleteAttendanceByRegistrationId
 };

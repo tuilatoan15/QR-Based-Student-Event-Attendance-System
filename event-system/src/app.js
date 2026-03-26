@@ -71,3 +71,4 @@ const start = () => {
 };
 
 module.exports = { app, start };
+// trigger nodemon restart

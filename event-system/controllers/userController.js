@@ -9,7 +9,7 @@ const getUserNotifications = async (req, res, next) => {
     const result = await pool.request()
       .input('user_id', sql.Int, userId)
       .query(`
-        SELECT id, title, message, is_read, created_at 
+        SELECT id, title, message, is_read, [type], event_id, created_at 
         FROM notifications 
         WHERE user_id = @user_id 
         ORDER BY created_at DESC
@@ -37,6 +37,25 @@ const markNotificationAsRead = async (req, res, next) => {
       `);
 
     return successResponse(res, 200, 'Notification marked as read');
+  } catch (err) {
+    next(err);
+  }
+};
+
+const markAllNotificationsAsRead = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const pool = await poolPromise;
+
+    await pool.request()
+      .input('user_id', sql.Int, userId)
+      .query(`
+        UPDATE notifications 
+        SET is_read = 1 
+        WHERE user_id = @user_id AND is_read = 0
+      `);
+
+    return successResponse(res, 200, 'All notifications marked as read');
   } catch (err) {
     next(err);
   }
@@ -197,6 +216,7 @@ const updateOrganizerProfile = async (req, res, next) => {
 module.exports = {
   getUserNotifications,
   markNotificationAsRead,
+  markAllNotificationsAsRead,
   updateAvatar,
   changePassword,
   getOrganizerProfile,

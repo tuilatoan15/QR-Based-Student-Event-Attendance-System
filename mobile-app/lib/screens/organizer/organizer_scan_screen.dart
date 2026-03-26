@@ -47,10 +47,23 @@ class _OrganizerScanScreenState extends State<OrganizerScanScreen> {
     super.dispose();
   }
 
+  String? _lastCode;
+  DateTime? _lastScanTime;
+
   Future<void> _onDetect(BarcodeCapture capture) async {
     if (_isProcessing) return;
     final code = capture.barcodes.firstOrNull?.rawValue;
     if (code == null || code.isEmpty) return;
+
+    final now = DateTime.now();
+    if (_lastCode == code && 
+        _lastScanTime != null && 
+        now.difference(_lastScanTime!).inSeconds < 3) {
+      return;
+    }
+
+    _lastCode = code;
+    _lastScanTime = now;
 
     setState(() => _isProcessing = true);
 
@@ -76,8 +89,10 @@ class _OrganizerScanScreenState extends State<OrganizerScanScreen> {
 
       setState(() {
         _isProcessing = false;
-        _history.insert(0, _ScanResult(message: msg, ok: ok));
-        if (_history.length > 8) _history.removeLast();
+        if (!alreadyDone) {
+           _history.insert(0, _ScanResult(message: msg, ok: ok));
+           if (_history.length > 8) _history.removeLast();
+        }
       });
     }
   }

@@ -157,7 +157,7 @@ const getEventParticipants = async (event_id) => {
        FROM registrations r
        JOIN users u ON r.user_id = u.id
        LEFT JOIN attendances a ON a.registration_id = r.id
-       WHERE r.event_id = @event_id
+       WHERE r.event_id = @event_id AND r.status != 'cancelled'
        ORDER BY r.registered_at ASC`
     );
   return result.recordset;
@@ -168,7 +168,7 @@ const countRegistrationsForEvent = async (event_id) => {
   const result = await pool
     .request()
     .input('event_id', sql.Int, event_id)
-    .query('SELECT COUNT(*) as count FROM registrations WHERE event_id = @event_id');
+    .query("SELECT COUNT(*) as count FROM registrations WHERE event_id = @event_id AND status != 'cancelled'");
   return result.recordset[0].count;
 };
 
