@@ -68,6 +68,9 @@ class AuthService extends ChangeNotifier {
       });
 
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      debugPrint(
+        '[AuthService] Login response ${response.statusCode}: ${response.body}',
+      );
 
       if (response.statusCode == 200 && decoded['success'] == true) {
         final data = decoded['data'] as Map<String, dynamic>;
@@ -92,6 +95,7 @@ class AuthService extends ChangeNotifier {
         errorMessage = decoded['message'] as String? ?? 'Login failed';
       }
     } catch (e) {
+      debugPrint('[AuthService] Login exception: $e');
       errorMessage = 'Unable to login. Please try again.';
     }
 
@@ -282,6 +286,39 @@ class AuthService extends ChangeNotifier {
       }
     } catch (e) {
       errorMessage = 'Error uploading avatar. Please try again.';
+    }
+
+    isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> forgotPassword(String email) async {
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      final response = await _api.post(
+        '/api/auth/forgot-password',
+        body: {
+          'email': email,
+        },
+        authenticated: false,
+      );
+
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200 && decoded['success'] == true) {
+        isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        errorMessage =
+            decoded['message'] as String? ?? 'Khong the dat lai mat khau';
+      }
+    } catch (e) {
+      errorMessage = 'Khong the ket noi. Vui long thu lai sau.';
     }
 
     isLoading = false;

@@ -1,7 +1,16 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
 const dotenv = require('dotenv');
-const { createUser, findUserByEmail, getRoleIdByName, getOrganizerInfoByUserId, createOrganizerInfo } = require('../models/userModel');
+
+const {
+  createUser,
+  findUserByEmail,
+  getRoleIdByName,
+  getOrganizerInfoByUserId,
+  createOrganizerInfo,
+  updateUserPassword,
+} = require('../models/userModel');
 const { successResponse, errorResponse } = require('../utils/response');
 const { logAuthAttempt } = require('../utils/logger');
 
@@ -9,6 +18,8 @@ dotenv.config();
 
 const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS || '10', 10);
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1d';
+const MAIL_USER = process.env.MAIL_USER || '';
+const MAIL_PASS = process.env.MAIL_PASS || '';
 
 const generateToken = (user) => {
   return jwt.sign(
@@ -16,6 +27,15 @@ const generateToken = (user) => {
     process.env.JWT_SECRET,
     { expiresIn: JWT_EXPIRES_IN }
   );
+};
+
+const generateRandomPassword = (length = 12) => {
+  const chars =
+    'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
+  return Array.from(
+    { length },
+    () => chars[Math.floor(Math.random() * chars.length)]
+  ).join('');
 };
 
 const register = async (req, res, next) => {
@@ -42,7 +62,7 @@ const register = async (req, res, next) => {
       email,
       password_hash,
       role_id: roleId,
-      student_code: student_code || null
+      student_code: student_code || null,
     });
 
     const userWithRole = { ...newUser, role_name: 'student' };
@@ -54,9 +74,9 @@ const register = async (req, res, next) => {
         full_name,
         email,
         student_code: newUser.student_code || student_code,
-        role: 'student'
+        role: 'student',
       },
-      token
+      token,
     });
   } catch (err) {
     next(err);
@@ -65,17 +85,34 @@ const register = async (req, res, next) => {
 
 const registerOrganizer = async (req, res, next) => {
   try {
-    const { full_name, email, password, organization_name, position, phone, bio, website } = req.body;
+    const {
+      full_name,
+      email,
+      password,
+      organization_name,
+      position,
+      phone,
+      bio,
+      website,
+    } = req.body;
 
     if (!full_name || !email || !password || !organization_name) {
-      return errorResponse(res, 400, 'full_name, email, password, and organization_name are required');
+      return errorResponse(
+        res,
+        400,
+        'full_name, email, password, and organization_name are required'
+      );
     }
 
     const existing = await findUserByEmail(email);
     if (existing) {
       const orgInfo = await getOrganizerInfoByUserId(existing.id);
       if (orgInfo) {
-        return errorResponse(res, 409, 'User is already registered as an organizer');
+        return errorResponse(
+          res,
+          409,
+          'User is already registered as an organizer'
+        );
       }
       return errorResponse(res, 409, 'Email already registered');
     }
@@ -91,7 +128,7 @@ const registerOrganizer = async (req, res, next) => {
       email,
       password_hash,
       role_id: roleId,
-      student_code: null
+      student_code: null,
     });
 
     await createOrganizerInfo({
@@ -100,10 +137,14 @@ const registerOrganizer = async (req, res, next) => {
       position,
       phone,
       bio,
-      website
+      website,
     });
 
-    return successResponse(res, 201, 'Đăng ký thành công, vui lòng chờ admin duyệt tài khoản');
+    return successResponse(
+      res,
+      201,
+      'Dang ky thanh cong, vui long cho admin duyet tai khoan'
+    );
   } catch (err) {
     next(err);
   }
@@ -129,7 +170,6 @@ const login = async (req, res, next) => {
     }
 
     const match = await bcrypt.compare(password, user.password_hash);
-    console.log('Login attempt:', { email, password, userFound: !!user, passwordHash: user?.password_hash, match });
     if (!match) {
       logAuthAttempt(email, false);
       return errorResponse(res, 401, 'Invalid credentials');
@@ -139,15 +179,22 @@ const login = async (req, res, next) => {
     if (orgInfo) {
       if (orgInfo.approval_status === 'pending') {
         logAuthAttempt(email, false);
-        return errorResponse(res, 403, 'Tài khoản của bạn chưa được Admin phê duyệt');
+        return errorResponse(
+          res,
+          403,
+          'Tai khoan cua ban chua duoc Admin phe duyet'
+        );
       }
       if (orgInfo.approval_status === 'rejected') {
         logAuthAttempt(email, false);
-        return errorResponse(res, 403, `Tài khoản đã bị từ chối: ${orgInfo.reject_reason || ''}`);
+        return errorResponse(
+          res,
+          403,
+          `Tai khoan da bi tu choi: ${orgInfo.reject_reason || ''}`
+        );
       }
     }
 
-    // Mobile app: block admin role only, allow organizer
     const client = (req.headers['x-client'] || '').toString().toLowerCase();
     const roleName = (user.role_name || '').toLowerCase();
     if (client === 'mobile-app' && roleName === 'admin') {
@@ -155,7 +202,7 @@ const login = async (req, res, next) => {
       return errorResponse(
         res,
         403,
-        'Admin must use the web admin dashboard.',
+        'Admin must use the web admin dashboard.'
       );
     }
 
@@ -169,10 +216,63 @@ const login = async (req, res, next) => {
         email: user.email,
         student_code: user.student_code,
         role: user.role_name,
-        avatar: user.avatar || null
+        avatar: user.avatar || null,
       },
-      token
+      token,
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return errorResponse(res, 400, 'email is required');
+    }
+
+    const user = await findUserByEmail(email);
+    if (!user) {
+      return errorResponse(res, 404, 'Email chua duoc dang ky');
+    }
+
+    const newPassword = generateRandomPassword();
+    const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await updateUserPassword(user.id, passwordHash);
+
+    if (!MAIL_USER || !MAIL_PASS) {
+      return errorResponse(
+        res,
+        500,
+        'Chua cau hinh MAIL_USER va MAIL_PASS trong file .env'
+      );
+    }
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: MAIL_USER,
+        pass: MAIL_PASS,
+      },
+    });
+
+    await transporter.sendMail({
+      from: `"EventPass Support" <${MAIL_USER}>`,
+      to: email,
+      subject: 'Cap lai mat khau EventPass',
+      text:
+        `Xin chao ${user.full_name},\n\n` +
+        `Mat khau moi cua ban la: ${newPassword}\n\n` +
+        'Vui long dang nhap lai va doi mat khau sau khi vao he thong.',
+    });
+
+    return successResponse(
+      res,
+      200,
+      'Mat khau moi da duoc gui ve email dang ky'
+    );
   } catch (err) {
     next(err);
   }
@@ -181,5 +281,6 @@ const login = async (req, res, next) => {
 module.exports = {
   register,
   registerOrganizer,
-  login
+  login,
+  forgotPassword,
 };

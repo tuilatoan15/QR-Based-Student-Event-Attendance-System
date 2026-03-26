@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/auth_service.dart';
 import '../services/event_service.dart';
+import '../services/notification_service.dart';
+import '../services/organizer_service.dart';
 import '../config/api_config.dart';
 import 'help_center_screen.dart';
 import 'settings_screen.dart';
@@ -94,9 +96,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               backgroundColor: const Color(0xFFF1F5F9),
                               backgroundImage: user.avatar != null 
                                 ? NetworkImage(
-                                    user.avatar!.startsWith('http')
-                                      ? user.avatar!
-                                      : '${ApiConfig.baseUrl}${user.avatar}'
+                                    ApiConfig.resolveMediaUrl(user.avatar!)
                                   )
                                 : null,
                               child: user.avatar == null 
@@ -165,7 +165,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: () async {
+                        // Clear all data
+                        if (context.mounted) {
+                          context.read<EventService>().clearData();
+                          context.read<NotificationService>().clearData();
+                          context.read<OrganizerService>().clearData();
+                        }
+                        
                         await authService.logout();
+                        
                         if (context.mounted) {
                           Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
                         }

@@ -22,21 +22,19 @@ const QRScannerPage: React.FC = () => {
       const dataRes = res.data?.data;
       const isWarning = dataRes?.already_checked_in === true;
       const studentName = dataRes?.student_name || '';
-      const checkinTime = dataRes?.check_in_time;
+
+      if (isWarning) {
+        return;
+      }
       
-      let message = res.data?.message || (isWarning ? 'Đã điểm danh trước đó' : 'Check-in thành công!');
+      let message = res.data?.message || 'Check-in thành công!';
       
       if (studentName) {
         message = `${studentName}: ${message}`;
       }
       
-      if (checkinTime && isWarning) {
-        const timeStr = new Date(checkinTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-        message += ` (${timeStr})`;
-      }
-
-      setLastResult({ message, isWarning });
-      if (!isWarning) setScanCount(c => c + 1);
+      setLastResult({ message, isWarning: false });
+      setScanCount(c => c + 1);
     } catch (err: any) {
       const backendMessage = err?.response?.data?.message;
       setError(backendMessage || 'Check-in thất bại. Vui lòng kiểm tra mã QR.');

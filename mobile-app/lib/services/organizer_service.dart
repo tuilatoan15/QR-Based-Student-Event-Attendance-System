@@ -90,8 +90,10 @@ class OrganizerService extends ChangeNotifier {
         files.add(await http.MultipartFile.fromPath('images', path));
       }
       
-      if (files.isEmpty) {
+      if (existingImages.isNotEmpty) {
         fields['images'] = jsonEncode(existingImages);
+      } else if (files.isEmpty) {
+        fields['images'] = '[]';
       }
 
       final response = await _api.sendMultipart(
@@ -194,9 +196,11 @@ class OrganizerService extends ChangeNotifier {
             fullName: (m['student_name'] ?? m['full_name'] ?? m['name'] ?? '') as String,
             email: (m['email'] ?? '') as String,
             studentCode: m['student_code'] as String?,
-            status: (m['registration_status'] == 'attended' || m['status'] == 'checked_in')
-                ? 'checked_in'
-                : 'registered',
+            status: m['registration_status'] == 'cancelled'
+                ? 'cancelled'
+                : (m['registration_status'] == 'attended' || m['status'] == 'checked_in')
+                    ? 'checked_in'
+                    : 'registered',
             checkInTime: m['check_in_time'] != null
                 ? DateTime.tryParse(m['check_in_time'].toString().endsWith('Z') ? m['check_in_time'] : '${m['check_in_time']}Z')?.toLocal()
                 : null,
@@ -282,5 +286,12 @@ class OrganizerService extends ChangeNotifier {
 
   // ─── Attendance helpers ───────────────────────────────────────────────────
 
-  int get attendanceCheckedIn => attendance.where((p) => p.isCheckedIn).length;
+  void clearData() {
+    myEvents = [];
+    participants = [];
+    attendance = [];
+    isLoading = false;
+    errorMessage = null;
+    notifyListeners();
+  }
 }

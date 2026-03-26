@@ -17,14 +17,25 @@ const {
   getRegistrationsForEvent,
   getAttendancesForEvent,
   updateRegistrationStatus,
+  deleteAttendanceByRegistrationId,
   REGISTRATION_STATUS
 } = require('../models/registrationModel');
 const qrService = require('../services/qrService');
 const { successResponse, paginatedSuccessResponse, errorResponse } = require('../utils/response');
 const googleSheetService = require('../services/googleSheetService');
 const { findUserById } = require('../models/userModel');
+const { createNotification } = require('../models/notificationModel');
 const sanitizeHtml = require('sanitize-html');
 const cloudinary = require('../config/cloudinary');
+
+const sanitizeOptions = {
+  allowedTags: sanitizeHtml.defaults.allowedTags.concat([ 'img' ]),
+  allowedAttributes: {
+    ...sanitizeHtml.defaults.allowedAttributes,
+    'img': [ 'src', 'alt', 'width', 'height', 'style' ],
+    '*': ['style']
+  }
+};
 
 const getEvents = async (req, res, next) => {
   try {
@@ -67,7 +78,7 @@ const createEventHandler = async (req, res, next) => {
   try {
     const { title, description, location, start_time, end_time, max_participants, category_id } = req.body;
 
-    const sanitizedDescription = description ? sanitizeHtml(description) : null;
+    const sanitizedDescription = description ? sanitizeHtml(description, sanitizeOptions) : null;
     let imagesUrlStr = null;
     if (req.files && req.files.length > 0) {
       const uploadPromises = req.files.map(file => {
@@ -164,7 +175,7 @@ const updateEventHandler = async (req, res, next) => {
     
     let sanitizedDescription = undefined;
     if (description !== undefined) {
-      sanitizedDescription = description ? sanitizeHtml(description) : null;
+      sanitizedDescription = description ? sanitizeHtml(description, sanitizeOptions) : null;
     }
 
     let imagesUrlStr = undefined;
@@ -175,10 +186,19 @@ const updateEventHandler = async (req, res, next) => {
         return cloudinary.uploader.upload(dataURI, { folder: 'events', resource_type: 'image' });
       });
       const results = await Promise.all(uploadPromises);
-      const urls = results.map(r => r.secure_url);
-      imagesUrlStr = JSON.stringify(urls);
+      const newUrls = results.map(r => r.secure_url);
+      
+      let finalUrls = newUrls;
+      if (req.body.images) {
+        try {
+          const oldUrls = JSON.parse(req.body.images);
+          if (Array.isArray(oldUrls)) {
+            finalUrls = [...oldUrls, ...newUrls];
+          }
+        } catch(e) { }
+      }
+      imagesUrlStr = JSON.stringify(finalUrls);
     } else if (req.body.images !== undefined) {
-      // In case no new images are uploaded, but we still pass existing ones
       imagesUrlStr = req.body.images;
     }
 
@@ -280,6 +300,18 @@ const registerForEvent = async (req, res, next) => {
 
     const qr_code = await qrService.generateQRCodeDataURL(qr_token);
 
+    try {
+      await createNotification({
+        user_id: userId,
+        title: 'Đăng ký sự kiện thành công',
+        message: `Bạn đã đăng ký tham gia sự kiện "${event.title}" thành công.`,
+        type: 'registration',
+        event_id: eventId
+      });
+    } catch (notifError) {
+      console.error('Error creating registration notification:', notifError);
+    }
+
     return successResponse(res, 201, 'Registered successfully', {
       registration: { id: registration.id, event_id: eventId, user_id: userId },
       qr_token: qr_token,
@@ -338,6 +370,25 @@ const cancelRegistration = async (req, res, next) => {
     }
 
     await updateRegistrationStatus(registration.id, REGISTRATION_STATUS.CANCELLED);
+    // Also delete attendance if exists, so they can re-register and re-checkin
+    await deleteAttendanceByRegistrationId(registration.id);
+
+    // Create notification
+    try {
+      const event = await getEventById(eventId);
+      if (event) {
+        await createNotification({
+          user_id: userId,
+          title: 'Huỷ đăng ký sự kiện',
+          message: `Bạn đã huỷ đăng ký tham gia sự kiện "${event.title}".`,
+          type: 'cancellation',
+          event_id: eventId
+        });
+      }
+    } catch (notifError) {
+      console.error('Error creating cancellation notification:', notifError);
+    }
+
     return successResponse(res, 200, 'Registration cancelled successfully');
   } catch (err) {
     next(err);

@@ -73,7 +73,7 @@ router.post('/editor-image', uploadEditorArgs, async (req, res) => {
     });
   } catch (error) {
     console.error('Editor Image Upload Error:', error);
-    res.status(500).json({ success: false, message: 'Image upload failed' });
+    res.status(500).json({ success: false, message: error.message || error.toString(), detailed_error: error });
   }
 });
 

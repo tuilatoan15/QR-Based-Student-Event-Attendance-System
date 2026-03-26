@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../services/organizer_service.dart';
 import 'organizer_dashboard_screen.dart';
 import 'organizer_events_screen.dart';
 import 'organizer_attendance_screen.dart';
@@ -38,7 +40,12 @@ class OrganizerShellState extends State<OrganizerShell> {
       body: IndexedStack(index: _currentIndex, children: pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: (i) => setState(() => _currentIndex = i),
+        onDestinationSelected: (i) {
+          setState(() => _currentIndex = i);
+          if (i == 0 || i == 1) {
+            context.read<OrganizerService>().fetchMyEvents();
+          }
+        },
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
         indicatorColor: accent.withOpacity(0.12),

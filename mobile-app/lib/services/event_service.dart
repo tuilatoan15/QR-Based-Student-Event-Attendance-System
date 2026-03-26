@@ -194,4 +194,13 @@ class EventService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void clearData() {
+    events = [];
+    myEvents = [];
+    organizerEvents = [];
+    eventParticipants = [];
+    _registrations = {};
+    errorMessage = null;
+    notifyListeners();
+  }
 }

@@ -50,13 +50,13 @@ const AttendancePage: React.FC = () => {
       } finally { setLoading(false); }
     };
     void init();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Reload when eventId changes — pass new value directly to avoid stale closure
   useEffect(() => {
     void reload(eventId, search);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
   const filtered = useMemo(() => {
@@ -85,25 +85,26 @@ const AttendancePage: React.FC = () => {
       const alreadyDone = data?.already_checked_in === true;
       const studentName = data?.student_name || '';
       const checkinTime = data?.check_in_time;
-      
-      let displayMsg = res.data?.message || (alreadyDone ? 'Sinh viên đã điểm danh trước đó' : 'Điểm danh thành công');
-      
+
+      if (alreadyDone) {
+        await reload(eventId, search);
+        return;
+      }
+
+      let displayMsg = res.data?.message || 'Điểm danh thành công';
+
       if (studentName) {
         displayMsg = `${studentName} - ${displayMsg}`;
       }
-      
+
       if (checkinTime) {
         const timeStr = new Date(checkinTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
         displayMsg += ` (${timeStr})`;
       }
 
-      setManualResult({ ok: true, msg: alreadyDone ? '⚠️ ' + displayMsg : '✓ ' + displayMsg });
-      
-      if (!alreadyDone) {
-        setManualStudentCode('');
-        notifySuccess(displayMsg);
-      }
-      // Always reload to show student in list / highlight them
+      setManualResult({ ok: true, msg: '✓ ' + displayMsg });
+      setManualStudentCode('');
+      notifySuccess(displayMsg);
       await reload(eventId, search);
     } catch (err: any) {
       const m = err?.response?.data?.message || 'Check-in thất bại';
@@ -112,7 +113,7 @@ const AttendancePage: React.FC = () => {
   };
 
   const onExportCsv = () => {
-    const header = ['Tên sinh viên','Email','Mã SV','Sự kiện','Giờ check-in'];
+    const header = ['Tên sinh viên', 'Email', 'Mã SV', 'Sự kiện', 'Giờ check-in'];
     const rows = filtered.map((r) => {
       const time = r.check_in_time || (r as any).checkin_time || (r as any).checkInTime || (r as any).CHECK_IN_TIME || (r.registration_status === 'attended' ? r.registered_at : null);
       return [r.student_name, r.email, r.student_code ?? '', r.event_title, time ? new Date(time).toLocaleString('vi-VN') : ''];
@@ -121,7 +122,7 @@ const AttendancePage: React.FC = () => {
   };
 
   const onExportXlsx = () => {
-    const header = ['Tên sinh viên','Email','Mã SV','Sự kiện','Giờ check-in'];
+    const header = ['Tên sinh viên', 'Email', 'Mã SV', 'Sự kiện', 'Giờ check-in'];
     const rows = filtered.map((r) => {
       const time = r.check_in_time || (r as any).checkin_time || (r as any).checkInTime || (r as any).CHECK_IN_TIME || (r.registration_status === 'attended' ? r.registered_at : null);
       return [r.student_name, r.email, r.student_code ?? '', r.event_title, time ? new Date(time).toLocaleString('vi-VN') : ''];
@@ -137,24 +138,23 @@ const AttendancePage: React.FC = () => {
       const data = res.data?.data;
       const alreadyDone = data?.already_checked_in === true;
       const studentName = data?.student_name || '';
-      const checkinTime = data?.check_in_time;
-      
-      let displayMsg = res.data?.message || (alreadyDone ? 'Đã điểm danh trước đó' : 'Check-in thành công');
-      
+
+      if (alreadyDone) {
+        await reload(eventId, search);
+        return;
+      }
+
+      let displayMsg = res.data?.message || 'Check-in thành công';
+
       if (studentName) {
         displayMsg = `${studentName}: ${displayMsg}`;
       }
-      
-      if (checkinTime && alreadyDone) {
-        const timeStr = new Date(checkinTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-        displayMsg += ` vào lúc ${timeStr}`;
-      }
 
-      setScanResults(prev => [{ at: new Date().toISOString(), ok: true, message: displayMsg }, ...prev].slice(0, 8));
-      
-      if (!alreadyDone) {
-        notifySuccess(displayMsg);
-      }
+      setScanResults(prev => {
+        return [{ at: new Date().toISOString(), ok: true, message: displayMsg }, ...prev].slice(0, 8);
+      });
+
+      notifySuccess(displayMsg);
       await reload(eventId, search);
     } catch (err: any) {
       const msg = err?.response?.data?.message || 'Check-in thất bại. Kiểm tra lại mã QR.';
@@ -163,8 +163,8 @@ const AttendancePage: React.FC = () => {
   };
 
   if (loading) return (
-    <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:300,gap:12,color:'#94a3b8',fontSize:13}}>
-      <div style={{width:20,height:20,border:'2px solid #e0eeff',borderTopColor:'#0284c7',borderRadius:'50%',animation:'att-spin .7s linear infinite'}}/>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, gap: 12, color: '#94a3b8', fontSize: 13 }}>
+      <div style={{ width: 20, height: 20, border: '2px solid #e0eeff', borderTopColor: '#0284c7', borderRadius: '50%', animation: 'att-spin .7s linear infinite' }} />
       <style>{`@keyframes att-spin{to{transform:rotate(360deg)}}`}</style>
       Đang tải dữ liệu điểm danh...
     </div>
@@ -207,6 +207,7 @@ const AttendancePage: React.FC = () => {
         .att-student-email{font-size:11.5px;color:#94a3b8;margin-top:2px;}
         .att-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11.5px;font-weight:600;}
         .att-badge-attended{background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;}
+        .att-badge-cancelled{background:#fef2f2;color:#ef4444;border:1px solid #fee2e2;}
         .att-badge-reg{background:#fafafa;color:#64748b;border:1px solid #e2e8f0;}
         .att-empty{padding:40px 16px;text-align:center;color:#94a3b8;font-size:13px;}
         .att-count-badge{font-size:12px;color:#64748b;background:#f0f7ff;border:1px solid #e0eeff;padding:4px 10px;border-radius:20px;}
@@ -240,15 +241,15 @@ const AttendancePage: React.FC = () => {
         <div className="att-header">
           <div>
             <div className="att-title">Điểm danh</div>
-            <div className="att-subtitle">Xem lịch sử, check-in thủ công và quét QR</div>
+            <div className="att-subtitle">Xem lịch sử, điểm danh thủ công và quét QR</div>
           </div>
           <div className="att-export-row">
             <button type="button" onClick={onExportCsv} className="att-btn att-btn-csv">
-              <svg viewBox="0 0 14 14" fill="none" width="13" height="13"><path d="M2 10v2h10v-2M7 2v7M4 7l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <svg viewBox="0 0 14 14" fill="none" width="13" height="13"><path d="M2 10v2h10v-2M7 2v7M4 7l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
               Xuất CSV
             </button>
             <button type="button" onClick={onExportXlsx} className="att-btn att-btn-xlsx">
-              <svg viewBox="0 0 14 14" fill="none" width="13" height="13"><path d="M2 10v2h10v-2M7 2v7M4 7l3 3 3-3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <svg viewBox="0 0 14 14" fill="none" width="13" height="13"><path d="M2 10v2h10v-2M7 2v7M4 7l3 3 3-3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
               Xuất Excel
             </button>
           </div>
@@ -256,17 +257,22 @@ const AttendancePage: React.FC = () => {
 
         <div className="att-layout">
           {/* Left: table */}
-          <div style={{display:'flex',flexDirection:'column',gap:14}}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {/* Filters */}
             <div className="att-card">
               <div className="att-card-head">
                 <span className="att-card-title">Bộ lọc</span>
-                <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                   <span className="att-count-badge">{filtered.length} sinh viên</span>
-                  {eventId !== 'all' && (
-                    <span className="att-count-attended">
-                      ✓ {filtered.filter(r => r.registration_status === 'attended').length} đã check-in
-                    </span>
+                   {eventId !== 'all' && (
+                    <>
+                      <span className="att-count-attended">
+                        ✓ {filtered.filter(r => r.registration_status === 'attended').length} đã check-in
+                      </span>
+                      <span className="att-count-attended" style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fee2e2', marginLeft: 6 }}>
+                        ✕ {filtered.filter(r => r.registration_status === 'cancelled').length} đã hủy
+                      </span>
+                    </>
                   )}
                 </div>
               </div>
@@ -278,7 +284,7 @@ const AttendancePage: React.FC = () => {
                     <option value="all">Tất cả sự kiện (chỉ checked-in)</option>
                     {events.map(ev => <option key={ev.id} value={ev.id}>{ev.title}</option>)}
                   </select>
-                  <input type="text" placeholder="Tìm sinh viên, email, sự kiện..." className="att-search-input" value={search} onChange={e=>setSearch(e.target.value)}/>
+                  <input type="text" placeholder="Tìm sinh viên, email, sự kiện..." className="att-search-input" value={search} onChange={e => setSearch(e.target.value)} />
                   <button type="button" onClick={() => void reload(eventId, search)} className="att-apply-btn">Lọc</button>
                 </div>
               </div>
@@ -286,7 +292,7 @@ const AttendancePage: React.FC = () => {
 
             {/* Table */}
             <div className="att-card">
-              <div style={{overflowX:'auto'}}>
+              <div style={{ overflowX: 'auto' }}>
                 <table className="att-table">
                   <thead><tr>
                     <th>Sinh viên</th>
@@ -302,8 +308,8 @@ const AttendancePage: React.FC = () => {
                           <div className="att-student-email">{r.email}</div>
                           {r.student_code && <div className="att-student-email">{r.student_code}</div>}
                         </td>
-                        <td style={{fontSize:13,color:'#334155',maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.event_title}</td>
-                        <td style={{fontSize:12.5,color:'#64748b',whiteSpace:'nowrap'}}>
+                        <td style={{ fontSize: 13, color: '#334155', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.event_title}</td>
+                        <td style={{ fontSize: 12.5, color: '#64748b', whiteSpace: 'nowrap' }}>
                           {(() => {
                             const time = r.check_in_time || (r as any).checkin_time || (r as any).checkInTime || (r as any).CHECK_IN_TIME;
                             if (time) return new Date(time).toLocaleString('vi-VN');
@@ -314,13 +320,13 @@ const AttendancePage: React.FC = () => {
                           })()}
                         </td>
                         <td>
-                          <span className={`att-badge ${r.registration_status === 'attended' ? 'att-badge-attended' : 'att-badge-reg'}`}>
-                            {r.registration_status === 'attended' ? '✓ Đã check-in' : '○ Chưa check-in'}
+                           <span className={`att-badge ${r.registration_status === 'cancelled' ? 'att-badge-cancelled' : r.registration_status === 'attended' ? 'att-badge-attended' : 'att-badge-reg'}`}>
+                            {r.registration_status === 'cancelled' ? '✕ Đã hủy' : r.registration_status === 'attended' ? '✓ Đã check-in' : '○ Chưa check-in'}
                           </span>
                         </td>
                       </tr>
                     ))}
-                    {filtered.length===0&&(
+                    {filtered.length === 0 && (
                       <tr><td colSpan={4} className="att-empty">📭 Không có bản ghi nào</td></tr>
                     )}
                   </tbody>
@@ -330,15 +336,15 @@ const AttendancePage: React.FC = () => {
           </div>
 
           {/* Right: sidebar tools */}
-          <div style={{display:'flex',flexDirection:'column',gap:14}}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {/* Manual */}
             <div className="att-card">
-              <div className="att-card-head"><span className="att-card-title">Check-in thủ công</span></div>
+              <div className="att-card-head"><span className="att-card-title">Điểm danh thủ công</span></div>
               <div className="att-card-body">
-                <p style={{fontSize:12.5,color:'#94a3b8',marginBottom:12}}>
-                  Nhập <strong style={{color:'#334155'}}>Mã số sinh viên (MSSV)</strong> và chọn sự kiện để điểm danh
+                <p style={{ fontSize: 12.5, color: '#94a3b8', marginBottom: 12 }}>
+                  Nhập <strong style={{ color: '#334155' }}>Mã số sinh viên (MSSV)</strong> và chọn sự kiện để điểm danh
                 </p>
-                <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <input
                     type="text"
                     placeholder="Mã số sinh viên (vd: SV00001)"
@@ -349,7 +355,7 @@ const AttendancePage: React.FC = () => {
                   />
                   <select
                     className="att-select"
-                    style={{width:'100%'}}
+                    style={{ width: '100%' }}
                     value={manualEventId}
                     onChange={e => setManualEventId(e.target.value === '' ? '' : Number(e.target.value))}
                   >
@@ -361,16 +367,16 @@ const AttendancePage: React.FC = () => {
                     onClick={() => void onManualCheckin()}
                     className="att-checkin-btn"
                     disabled={manualLoading}
-                    style={{opacity: manualLoading ? 0.7 : 1}}
+                    style={{ opacity: manualLoading ? 0.7 : 1 }}
                   >
-                    {manualLoading ? 'Đang xử lý...' : '✓ Check-in'}
+                    {manualLoading ? 'Đang xử lý...' : '✓ Điểm danh'}
                   </button>
                   {manualResult && (
                     <div style={{
-                      padding:'10px 12px',
-                      borderRadius:8,
-                      fontSize:13,
-                      fontWeight:600,
+                      padding: '10px 12px',
+                      borderRadius: 8,
+                      fontSize: 13,
+                      fontWeight: 600,
                       background: manualResult.ok ? '#f0fdf4' : '#fff1f2',
                       color: manualResult.ok ? '#15803d' : '#be123c',
                       border: `1px solid ${manualResult.ok ? '#bbf7d0' : '#fecaca'}`
@@ -386,30 +392,30 @@ const AttendancePage: React.FC = () => {
             <div className="att-card">
               <div className="att-card-head">
                 <span className="att-card-title">Quét QR</span>
-                <button type="button" onClick={()=>setScanning(v=>!v)} className={`att-scan-toggle ${scanning?'stop':''}`}>
-                  {scanning?'⏹ Dừng':'▶ Bắt đầu'}
+                <button type="button" onClick={() => setScanning(v => !v)} className={`att-scan-toggle ${scanning ? 'stop' : ''}`}>
+                  {scanning ? '⏹ Dừng' : '▶ Bắt đầu'}
                 </button>
               </div>
               <div className="att-card-body">
                 {scanning && (
-                  <div style={{borderRadius:10,overflow:'hidden',border:'2px solid #e0eeff',marginBottom:12}}>
+                  <div style={{ borderRadius: 10, overflow: 'hidden', border: '2px solid #e0eeff', marginBottom: 12 }}>
                     <QrReader
                       constraints={{ facingMode: 'environment' }}
-                      onResult={(result) => { const text=result?.getText?.(); if(text) void handleScan(text); }}
+                      onResult={(result) => { const text = result?.getText?.(); if (text) void handleScan(text); }}
                       containerStyle={{ width: '100%' }}
                     />
                   </div>
                 )}
                 {processingScan && (
                   <div className="att-processing">
-                    <div className="att-proc-spin"/>Đang xử lý...
+                    <div className="att-proc-spin" />Đang xử lý...
                   </div>
                 )}
                 <div>
-                  {scanResults.length===0 && <div className="att-scan-empty">Chưa có kết quả quét nào</div>}
-                  {scanResults.map((r,i)=>(
-                    <div key={`${r.at}-${i}`} className={`att-scan-result ${r.ok?'ok':'fail'}`}>
-                      <div className={`att-scan-msg ${r.ok?'ok':'fail'}`}>{r.ok?'✓':'✗'} {r.message}</div>
+                  {scanResults.length === 0 && <div className="att-scan-empty">Chưa có kết quả quét nào</div>}
+                  {scanResults.map((r, i) => (
+                    <div key={`${r.at}-${i}`} className={`att-scan-result ${r.ok ? 'ok' : 'fail'}`}>
+                      <div className={`att-scan-msg ${r.ok ? 'ok' : 'fail'}`}>{r.ok ? '✓' : '✗'} {r.message}</div>
                       <div className="att-scan-time">{new Date(r.at).toLocaleString('vi-VN')}</div>
                     </div>
                   ))}

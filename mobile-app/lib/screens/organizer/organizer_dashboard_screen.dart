@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../services/organizer_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/event_service.dart';
+import '../../services/notification_service.dart';
 import '../../models/event.dart';
 import '../event_detail_screen.dart';
 import 'organizer_shell.dart';
@@ -105,7 +107,15 @@ class _OrganizerDashboardScreenState extends State<OrganizerDashboardScreen> {
                         ),
                         IconButton(
                           onPressed: () async {
+                            // Clear all data
+                            if (context.mounted) {
+                              context.read<EventService>().clearData();
+                              context.read<NotificationService>().clearData();
+                              context.read<OrganizerService>().clearData();
+                            }
+                            
                             await context.read<AuthService>().logout();
+                            
                             if (context.mounted) {
                               Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
                             }

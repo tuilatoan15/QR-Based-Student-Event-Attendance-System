@@ -222,10 +222,10 @@ const EventDetailPage: React.FC = () => {
           if (imgs.length === 0) return null;
           return (
             <div className="edp-desc-card">
-              <div className="edp-section-title">Hình ảnh sự kiện</div>
-              <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8 }}>
+              <div className="edp-section-title">Banner sự kiện</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {imgs.map((url, i) => (
-                  <img key={i} src={`http://localhost:5000${url}`} alt="" style={{ height: 160, borderRadius: 8, objectFit: 'cover' }} />
+                  <img key={i} src={url.startsWith('http') ? url : `http://localhost:5000${url}`} alt="" style={{ width: '100%', borderRadius: 8, objectFit: 'cover' }} />
                 ))}
               </div>
             </div>

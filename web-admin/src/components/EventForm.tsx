@@ -80,16 +80,19 @@ const EventForm: React.FC<Props> = ({ initial, onSubmit }) => {
         formData.append('description', description);
       }
       
+      // Append existing images
+      if (existingImages.length > 0) {
+        formData.append('images', JSON.stringify(existingImages));
+      } else if (selectedFiles.length === 0) {
+        // If they cleared all images, we send an empty array string so backend knows to clear.
+        formData.append('images', '[]');
+      }
+
       // Append files
       if (selectedFiles.length > 0) {
         selectedFiles.forEach(file => {
           formData.append('images', file);
         });
-      } else if (existingImages.length > 0) {
-        formData.append('images', JSON.stringify(existingImages));
-      } else {
-        // If they cleared all images, we send an empty array string so backend knows to clear.
-        formData.append('images', '[]');
       }
 
       await onSubmit(formData);
@@ -116,7 +119,7 @@ const EventForm: React.FC<Props> = ({ initial, onSubmit }) => {
         const res = await axiosClient.post('/upload/editor-image', fd, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
-        const url = 'http://localhost:5000' + res.data.url;
+        const url = res.data.url.startsWith('http') ? res.data.url : 'http://localhost:5000' + res.data.url;
         
         const quill = quillRef.current?.getEditor();
         if (quill) {
@@ -233,7 +236,7 @@ const EventForm: React.FC<Props> = ({ initial, onSubmit }) => {
             <div className="ef-preview-grid">
               {existingImages.map((url, i) => (
                 <div key={'ex_'+i} className="ef-preview-item">
-                  <img src={"http://localhost:5000" + url} className="ef-preview-img" alt="Existing" />
+                  <img src={url.startsWith('http') ? url : ("http://localhost:5000" + url)} className="ef-preview-img" alt="Existing" />
                   <button type="button" className="ef-preview-rm" onClick={() => removeExistingImage(i)}>✕</button>
                 </div>
               ))}

@@ -63,15 +63,55 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Huỷ đăng ký', style: TextStyle(fontWeight: FontWeight.w700)),
-        content: const Text('Bạn có chắc muốn huỷ đăng ký sự kiện này?', style: TextStyle(color: Color(0xFF64748B))),
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+        contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
+        title: const Text(
+          'Huỷ đăng ký',
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 22,
+            color: Color(0xFF0F172A),
+            letterSpacing: -0.3,
+          ),
+        ),
+        content: const Text(
+          'Bạn có chắc muốn huỷ đăng ký sự kiện này?',
+          style: TextStyle(
+            color: Color(0xFF64748B),
+            fontSize: 15,
+            height: 1.45,
+          ),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Không')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF0EA5E9),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+            child: const Text(
+              'Không',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+            ),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
-            child: const Text('Huỷ đăng ký'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            child: const Text(
+              'Huỷ đăng ký',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+            ),
           ),
         ],
       ),
@@ -240,6 +280,66 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         ),
                         const SizedBox(height: 12),
 
+                        // Image Gallery
+                        if (_event!.images.isNotEmpty) ...[
+                          _SectionCard(
+                            padding: EdgeInsets.zero,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                                  child: _CardLabel('Banner sự kiện', icon: Icons.photo_library_rounded, color: _accent),
+                                ),
+                                ClipRRect(
+                                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                                  child: ListView.separated(
+                                    shrinkWrap: true,
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    itemCount: _event!.images.length,
+                                    separatorBuilder: (_, __) => const SizedBox(height: 1),
+                                    itemBuilder: (ctx, idx) {
+                                      final imageUrl = ApiConfig.resolveMediaUrl(
+                                        _event!.images[idx],
+                                      );
+                                      return Image.network(
+                                        imageUrl,
+                                        width: double.infinity,
+                                        fit: BoxFit.fitWidth,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          return Container(
+                                            padding: const EdgeInsets.all(16),
+                                            color: const Color(0xFFF8FAFC),
+                                            child: const Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.broken_image_outlined,
+                                                  color: Color(0xFF94A3B8),
+                                                ),
+                                                SizedBox(width: 8),
+                                                Expanded(
+                                                  child: Text(
+                                                    'Không thể tải ảnh sự kiện',
+                                                    style: TextStyle(
+                                                      color: Color(0xFF64748B),
+                                                      fontSize: 13,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+
                         // Description
                         if (_event!.description != null && _event!.description!.isNotEmpty) ...[
                           _SectionCard(
@@ -256,35 +356,17 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                     return true;
                                   },
                                   textStyle: const TextStyle(fontSize: 14, color: Color(0xFF475569), height: 1.6),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                        ],
-
-                        // Image Gallery
-                        if (_event!.images.isNotEmpty) ...[
-                          _SectionCard(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _CardLabel('Hình ảnh', icon: Icons.photo_library_rounded, color: _accent),
-                                const SizedBox(height: 10),
-                                ListView.separated(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  itemCount: _event!.images.length,
-                                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                                  itemBuilder: (ctx, idx) {
-                                    return ClipRRect(
-                                      borderRadius: BorderRadius.circular(10),
-                                      child: Image.network(
-                                        '${ApiConfig.baseUrl}${_event!.images[idx]}',
-                                        width: double.infinity,
-                                        fit: BoxFit.fitWidth,
-                                      ),
-                                    );
+                                  customStylesBuilder: (element) {
+                                    if (element.localName == 'img') {
+                                      return {
+                                        'width': '100%',
+                                        'height': 'auto',
+                                        'object-fit': 'cover',
+                                        'border-radius': '12px',
+                                        'margin-bottom': '12px',
+                                      };
+                                    }
+                                    return null;
                                   },
                                 ),
                               ],
@@ -377,11 +459,12 @@ class _Circle extends StatelessWidget {
 }
 
 class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.child});
+  const _SectionCard({required this.child, this.padding = const EdgeInsets.all(16)});
   final Widget child;
+  final EdgeInsetsGeometry padding;
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(16),
+    padding: padding,
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(16),
