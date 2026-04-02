@@ -4,7 +4,7 @@ import type { Event } from '../api/eventApi';
 
 type Props = {
   events: Event[];
-  onDelete: (id: number) => void;
+  onDelete: (id: string) => void;
 };
 
 const EventTable: React.FC<Props> = ({ events, onDelete }) => {

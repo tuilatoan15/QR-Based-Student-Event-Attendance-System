@@ -54,7 +54,7 @@ class OrganizerShellState extends State<OrganizerShell> {
           NavigationDestination(
             icon: Icon(Icons.dashboard_outlined),
             selectedIcon: Icon(Icons.dashboard_rounded, color: Color(0xFF6C63FF)),
-            label: 'Dashboard',
+            label: 'Tổng quan',
           ),
           NavigationDestination(
             icon: Icon(Icons.event_outlined),
@@ -64,7 +64,7 @@ class OrganizerShellState extends State<OrganizerShell> {
           NavigationDestination(
             icon: Icon(Icons.qr_code_scanner_outlined),
             selectedIcon: Icon(Icons.qr_code_scanner_rounded, color: Color(0xFF6C63FF)),
-            label: 'Scan QR',
+            label: 'Quét QR',
           ),
           NavigationDestination(
             icon: Icon(Icons.fact_check_outlined),

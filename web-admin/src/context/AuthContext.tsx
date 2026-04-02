@@ -9,10 +9,11 @@ import axiosClient from '../api/axiosClient';
 import { onAuthLogout } from '../utils/authEvents';
 
 type User = {
-  id: number;
+  id: string;
   full_name: string;
   email: string;
   role: string;
+  avatar?: string;
 };
 
 type AuthContextValue = {
@@ -21,6 +22,7 @@ type AuthContextValue = {
   loading: boolean;
   login: (email: string, password: string) => Promise<User>;
   logout: () => void;
+  updateUser: (userData: Partial<User>) => void;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -71,6 +73,15 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({
     localStorage.removeItem(STORAGE_KEY_USER);
   }, []);
 
+  const updateUser = useCallback((userData: Partial<User>) => {
+    setUser((prev) => {
+      if (!prev) return null;
+      const updated = { ...prev, ...userData };
+      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
   useEffect(() => {
     return onAuthLogout(() => {
       logout();
@@ -78,7 +89,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({
   }, [logout]);
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, login, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
@@ -91,4 +102,3 @@ export const useAuth = (): AuthContextValue => {
   }
   return ctx;
 };
-

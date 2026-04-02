@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 
 export type DashboardEventRow = {
-  id: number;
+  id: string;
   title: string;
   location: string;
   start_time: string;
@@ -167,7 +167,7 @@ const DashboardEventTable: React.FC<DashboardEventTableProps> = ({ rows }) => {
                 <th>Địa điểm</th>
                 <th>Thời gian</th>
                 <th>Đăng ký</th>
-                <th>Check-in</th>
+                <th>Điểm danh</th>
                 <th>Thao tác</th>
               </tr>
             </thead>

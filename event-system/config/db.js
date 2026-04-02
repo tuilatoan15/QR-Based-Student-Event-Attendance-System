@@ -1,38 +1,36 @@
-const sql = require('mssql');
-const dotenv = require('dotenv');
+const mongoose = require('mongoose');
+const { logger } = require('../utils/logger');
 
-dotenv.config();
+let isConnected = false;
 
-const config = {
-  user: process.env.DB_USER || 'sa',
-  password: process.env.DB_PASSWORD || '',
-  server: process.env.DB_SERVER || 'localhost',
-  database: process.env.DB_NAME || process.env.DB_DATABASE || 'event_system',
-  port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 1433,
-  options: {
-    encrypt: false,
-    trustServerCertificate: true
-  },
-  pool: {
-    max: 10,
-    min: 0,
-    idleTimeoutMillis: 30000
+const connectDB = async () => {
+  if (isConnected) {
+    return mongoose.connection;
   }
-};
 
-const poolPromise = new sql.ConnectionPool(config)
-  .connect()
-  .then((pool) => {
-    console.log('SQL Server connected');
-    return pool;
-  })
-  .catch((err) => {
-    console.error('SQL Server connection error:', err);
-    throw err;
+  const mongoUri = process.env.MONGO_URI;
+  if (!mongoUri) {
+    throw new Error('MONGO_URI is required');
+  }
+
+  await mongoose.connect(mongoUri, {
+    maxPoolSize: parseInt(process.env.MONGO_MAX_POOL_SIZE || '20', 10),
+    minPoolSize: parseInt(process.env.MONGO_MIN_POOL_SIZE || '5', 10),
+    maxIdleTimeMS: 60000,
+    serverSelectionTimeoutMS: 15000,
   });
 
+  isConnected = true;
+  logger.info('MongoDB connected', {
+    host: mongoose.connection.host,
+    name: mongoose.connection.name,
+  });
+
+  return mongoose.connection;
+};
+
 module.exports = {
-  sql,
-  poolPromise
+  connectDB,
+  mongoose,
 };
 

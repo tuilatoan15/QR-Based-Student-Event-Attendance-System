@@ -5,8 +5,8 @@ import { exportToCsv, exportToXlsx } from '../utils/exporters';
 import { removeDiacritics } from '../utils/stringUtils';
 
 type Registration = {
-  id: number;
-  registration_id?: number;
+  id: string;
+  registration_id?: string;
   student_name?: string;
   email?: string;
   student_code?: string;
@@ -16,7 +16,7 @@ type Registration = {
 };
 
 const STATUS_MAP: Record<string, { label: string; bg: string; color: string }> = {
-  attended: { label: 'Đã check-in', bg: '#f0fdf4', color: '#15803d' },
+  attended: { label: 'Đã điểm danh', bg: '#f0fdf4', color: '#15803d' },
   registered: { label: 'Đã đăng ký', bg: '#eff6ff', color: '#1d4ed8' },
   cancelled: { label: 'Đã huỷ', bg: '#fff1f2', color: '#be123c' },
 };
@@ -41,7 +41,7 @@ const EventRegistrationsPage: React.FC = () => {
       if (!id) return;
       setLoading(true); setError(null);
       try {
-        const res = await eventApi.getEventRegistrations(Number(id));
+        const res = await eventApi.getEventRegistrations(id);
         const data = res.data.data ?? res.data;
         setRegistrations(Array.isArray(data) ? data : []);
       } catch (err: any) {
@@ -68,11 +68,11 @@ const EventRegistrationsPage: React.FC = () => {
   }), [registrations]);
 
   const doExportCsv = () => {
-    const h = ['Tên sinh viên', 'Email', 'Mã SV', 'Trạng thái', 'Ngày đăng ký', 'Giờ check-in'];
+    const h = ['Tên sinh viên', 'Email', 'Mã SV', 'Trạng thái', 'Ngày đăng ký', 'Giờ điểm danh'];
     exportToCsv(`event-${id}-participants.csv`, h, filtered.map(r => [r.student_name ?? '', r.email ?? '', r.student_code ?? '', r.registration_status ?? '', r.registered_at ?? '', r.checkin_time ?? '']));
   };
   const doExportXlsx = () => {
-    const h = ['Tên sinh viên', 'Email', 'Mã SV', 'Trạng thái', 'Ngày đăng ký', 'Giờ check-in'];
+    const h = ['Tên sinh viên', 'Email', 'Mã SV', 'Trạng thái', 'Ngày đăng ký', 'Giờ điểm danh'];
     exportToXlsx(`event-${id}-participants.xlsx`, 'Participants', h, filtered.map(r => [r.student_name ?? '', r.email ?? '', r.student_code ?? '', r.registration_status ?? '', r.registered_at ?? '', r.checkin_time ?? '']));
   };
 
@@ -146,7 +146,7 @@ const EventRegistrationsPage: React.FC = () => {
           {([
             { key: 'all', label: 'Tất cả', val: counts.all, color: '#0f172a' },
             { key: 'registered', label: 'Đã đăng ký', val: counts.registered, color: '#1d4ed8' },
-            { key: 'attended', label: 'Đã check-in', val: counts.attended, color: '#15803d' },
+            { key: 'attended', label: 'Đã điểm danh', val: counts.attended, color: '#15803d' },
             { key: 'cancelled', label: 'Đã huỷ', val: counts.cancelled, color: '#be123c' },
           ] as const).map(s => (
             <div key={s.key} className={`erp-stat ${statusFilter === s.key ? 'active' : ''}`} onClick={() => setStatusFilter(s.key)}>
@@ -168,7 +168,7 @@ const EventRegistrationsPage: React.FC = () => {
           <div style={{ overflowX: 'auto' }}>
             <table className="erp-table">
               <thead><tr>
-                <th>Sinh viên</th><th>Email</th><th>Ngày đăng ký</th><th>Trạng thái</th><th>Giờ check-in</th>
+                <th>Sinh viên</th><th>Email</th><th>Ngày đăng ký</th><th>Trạng thái</th><th>Giờ điểm danh</th>
               </tr></thead>
               <tbody>
                 {filtered.map(reg => {

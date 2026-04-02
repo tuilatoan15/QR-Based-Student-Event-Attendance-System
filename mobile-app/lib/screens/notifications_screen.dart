@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../services/notification_service.dart';
 import 'event_detail_screen.dart';
+import 'report_history_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -26,6 +27,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (type == 'registration') return Icons.event_available_rounded;
     if (type == 'cancellation') return Icons.event_busy_rounded;
     if (type == 'checkin') return Icons.how_to_reg_rounded;
+    if (type == 'feedback') return Icons.feedback_rounded;
     if (title.contains('Điểm danh')) return Icons.check_circle_rounded;
     return Icons.notifications_active_rounded;
   }
@@ -35,6 +37,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (type == 'registration') return const Color(0xFF10B981);
     if (type == 'cancellation') return const Color(0xFFEF4444);
     if (type == 'checkin') return const Color(0xFF3B82F6);
+    if (type == 'feedback') return const Color(0xFFEA580C);
     return const Color(0xFF00CCFF);
   }
 
@@ -133,6 +136,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 context,
                                 EventDetailScreen.routeName,
                                 arguments: notif.eventId,
+                              );
+                            } else if (notif.type == 'feedback') {
+                              Navigator.pushNamed(
+                                context,
+                                ReportHistoryScreen.routeName,
                               );
                             }
                           },

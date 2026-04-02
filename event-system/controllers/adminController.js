@@ -1,223 +1,114 @@
-const { poolPromise, sql } = require('../config/db');
-const { errorResponse, successResponse, paginatedSuccessResponse } = require('../utils/response');
-const { listUsers, countUsers, setUserRoleByName, setUserActive, findUserById } = require('../models/userModel');
-const { getRegistrationById, updateRegistrationStatus, REGISTRATION_STATUS } = require('../models/registrationModel');
+const User = require('../models/userModel');
+const { successResponse, errorResponse } = require('../utils/response');
 
-const listUsersHandler = async (req, res, next) => {
+const getOrganizers = async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 20;
-    const search = String(req.query.search || '');
-    const safePage = Number.isInteger(page) && page > 0 ? page : 1;
-    const safeLimit = Number.isInteger(limit) && limit > 0 && limit <= 100 ? limit : 20;
-    const offset = (safePage - 1) * safeLimit;
+    const status = String(req.query.status || '').trim().toLowerCase();
+    const filter = status ? { approval_status: status } : {};
+    const organizerInfos = await req.app.locals.db.collection('organizer_infos').find(filter).toArray();
 
-    const [items, total] = await Promise.all([
-      listUsers({ offset, limit: safeLimit, search }),
-      countUsers({ search })
-    ]);
+    const userIds = organizerInfos.map((item) => item.user_id).filter(Boolean);
+    const users = await User.find({ _id: { $in: userIds } }).select('full_name email avatar');
+    const userMap = new Map(users.map((user) => [user._id.toString(), user]));
 
-    return paginatedSuccessResponse(res, 200, 'Users retrieved successfully', items, {
-      page: safePage,
-      limit: safeLimit,
-      total
+    const data = organizerInfos.map((info) => {
+      const user = userMap.get(String(info.user_id || ''));
+      return {
+        user_id: String(info.user_id || ''),
+        full_name: user?.full_name || info.full_name || '',
+        email: user?.email || info.email || '',
+        avatar: user?.avatar || null,
+        organization_name: info.organization_name || '',
+        position: info.position || null,
+        phone: info.phone || null,
+        bio: info.bio || null,
+        website: info.website || null,
+        approval_status: info.approval_status || 'pending',
+        reject_reason: info.reject_reason || null,
+        created_at: info.created_at || null,
+      };
     });
-  } catch (err) {
-    next(err);
+
+    return successResponse(res, 200, 'Organizers retrieved successfully', data);
+  } catch (error) {
+    next(error);
   }
 };
 
-const updateUserRoleHandler = async (req, res, next) => {
+const approveOrganizer = async (req, res, next) => {
   try {
-    const userId = parseInt(req.params.id, 10);
-    const { role } = req.body || {};
-    if (!userId || !Number.isInteger(userId)) return errorResponse(res, 400, 'Invalid user id');
-    if (!role || typeof role !== 'string') return errorResponse(res, 400, 'role is required');
-    if (req.user?.id === userId) return errorResponse(res, 400, 'You cannot change your own role');
-
-    const existing = await findUserById(userId);
-    if (!existing) return errorResponse(res, 404, 'User not found');
-
-    const ok = await setUserRoleByName(userId, role);
-    if (!ok) return errorResponse(res, 400, 'Invalid role');
-
-    return successResponse(res, 200, 'User role updated successfully', { id: userId, role });
-  } catch (err) {
-    next(err);
-  }
-};
-
-const deactivateUserHandler = async (req, res, next) => {
-  try {
-    const userId = parseInt(req.params.id, 10);
-    const { is_active } = req.body || {};
-    if (!userId || !Number.isInteger(userId)) return errorResponse(res, 400, 'Invalid user id');
-    if (typeof is_active !== 'boolean') return errorResponse(res, 400, 'is_active (boolean) is required');
-    if (req.user?.id === userId) return errorResponse(res, 400, 'You cannot deactivate your own account');
-
-    const existing = await findUserById(userId);
-    if (!existing) return errorResponse(res, 404, 'User not found');
-
-    await setUserActive(userId, is_active);
-    return successResponse(res, 200, 'User updated successfully', { id: userId, is_active });
-  } catch (err) {
-    next(err);
-  }
-};
-
-// NOTE: Registration status is controlled by student actions + QR attendance only.
-// No manual registration status mutation endpoint is exposed via admin API.
-
-const getPendingOrganizersHandler = async (req, res, next) => {
-  try {
-    const status = req.query.status || 'pending';
-    const pool = await poolPromise;
-    const result = await pool
-      .request()
-      .input('status', sql.VarChar(20), status)
-      .query(`
-        SELECT o.user_id, u.full_name, u.email, u.avatar,
-               o.organization_name, o.position, o.phone, o.bio, o.website,
-               o.approval_status, o.created_at, o.reject_reason
-        FROM organizer_info o
-        JOIN users u ON o.user_id = u.id
-        WHERE o.approval_status = @status
-        ORDER BY o.created_at DESC
-      `);
-    return successResponse(res, 200, 'Organizers retrieved successfully', result.recordset);
-  } catch (err) {
-    next(err);
-  }
-};
-
-const approveOrganizerHandler = async (req, res, next) => {
-  try {
-    const userId = parseInt(req.params.id, 10);
-    if (!userId || !Number.isInteger(userId)) return errorResponse(res, 400, 'Invalid user id');
-
-    const pool = await poolPromise;
-    
-    // update organizer_info
-    const result = await pool.request()
-      .input('user_id', sql.Int, userId)
-      .input('admin_id', sql.Int, req.user.id)
-      .query(`
-        UPDATE organizer_info 
-        SET approval_status = 'approved', approved_by = @admin_id, approved_at = GETDATE(), updated_at = GETDATE()
-        WHERE user_id = @user_id
-        AND (approval_status = 'pending' OR approval_status = 'rejected')
-      `);
-      
-    if (result.rowsAffected[0] === 0) {
-      return errorResponse(res, 404, 'Organizer info not found or not in valid state');
-    }
-      
-    // update users role to 2 (organizer)
-    await setUserRoleByName(userId, 'organizer');
-    
-    return successResponse(res, 200, 'Đã duyệt tài khoản organizer');
-  } catch (err) {
-    next(err);
-  }
-};
-
-const rejectOrganizerHandler = async (req, res, next) => {
-  try {
-    const userId = parseInt(req.params.id, 10);
-    const { reason } = req.body || {};
-    if (!userId || !Number.isInteger(userId)) return errorResponse(res, 400, 'Invalid user id');
-    if (!reason || typeof reason !== 'string') return errorResponse(res, 400, 'reason is required');
-
-    const pool = await poolPromise;
-    
-    const result = await pool.request()
-      .input('user_id', sql.Int, userId)
-      .input('admin_id', sql.Int, req.user.id)
-      .input('reason', sql.NVarChar(255), reason)
-      .query(`
-        UPDATE organizer_info 
-        SET approval_status = 'rejected', approved_by = @admin_id, approved_at = GETDATE(), reject_reason = @reason, updated_at = GETDATE()
-        WHERE user_id = @user_id
-        AND approval_status = 'pending'
-      `);
-      
-    if (result.rowsAffected[0] === 0) {
-      return errorResponse(res, 404, 'Organizer info not found or not in valid state');
-    }
-      
-    return successResponse(res, 200, 'Đã từ chối tài khoản organizer');
-  } catch (err) {
-    next(err);
-  }
-};
-
-const listAttendanceHandler = async (req, res, next) => {
-  try {
-    const eventId = req.query.event_id ? parseInt(req.query.event_id, 10) : null;
-    const search = String(req.query.search || '').trim();
-
-    const pool = await poolPromise;
-    const request = pool.request();
-
-    let whereSql = 'WHERE 1=1';
-
-    // If user is organizer, only show registrations for their events
-    if (req.user.role !== 'admin') {
-      request.input('organizer_id', sql.Int, req.user.id);
-      whereSql += ' AND e.created_by = @organizer_id';
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return errorResponse(res, 404, 'User not found');
     }
 
-    if (eventId && Number.isInteger(eventId)) {
-      request.input('event_id', sql.Int, eventId);
-      whereSql += ' AND r.event_id = @event_id';
-    } else {
-      // When no specific event selected, only show attended records (default behaviour)
-      whereSql += " AND r.status = 'attended'";
-    }
-
-    if (search) {
-      request.input('search', sql.NVarChar(255), `%${search}%`);
-      whereSql += ' AND (u.full_name LIKE @search OR u.email LIKE @search OR u.student_code LIKE @search OR e.title LIKE @search)';
-    }
-
-    const result = await request.query(
-      `SELECT 
-         a.id AS attendance_id,
-         r.id AS registration_id,
-         a.checkin_time AS check_in_time,
-         a.checkin_by AS checkin_by,
-         r.event_id,
-         r.status AS registration_status,
-         u.id AS user_id,
-         u.full_name AS student_name,
-         u.email,
-         u.student_code,
-         e.title AS event_title,
-         r.registered_at
-       FROM registrations r
-       JOIN users u ON r.user_id = u.id
-       JOIN events e ON r.event_id = e.id
-       LEFT JOIN attendances a ON a.registration_id = r.id
-       ${whereSql}
-       ORDER BY 
-         CASE WHEN r.status = 'attended' THEN 0 ELSE 1 END,
-         a.checkin_time DESC,
-         r.registered_at DESC`
+    await req.app.locals.db.collection('organizer_infos').updateOne(
+      { user_id: user._id },
+      {
+        $set: {
+          user_id: user._id,
+          approval_status: 'approved',
+          reject_reason: null,
+          approved_by: req.user.id,
+          updated_at: new Date(),
+        },
+        $setOnInsert: {
+          created_at: new Date(),
+        },
+      },
+      { upsert: true }
     );
 
-    return successResponse(res, 200, 'Attendance retrieved successfully', result.recordset);
-  } catch (err) {
-    next(err);
+    user.role = 'organizer';
+    await user.save();
+
+    return successResponse(res, 200, 'Organizer approved successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
+const rejectOrganizer = async (req, res, next) => {
+  try {
+    const reason = String(req.body.reason || '').trim();
+    if (!reason) {
+      return errorResponse(res, 400, 'reason is required');
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return errorResponse(res, 404, 'User not found');
+    }
+
+    await req.app.locals.db.collection('organizer_infos').updateOne(
+      { user_id: user._id },
+      {
+        $set: {
+          user_id: user._id,
+          full_name: user.full_name,
+          email: user.email,
+          approval_status: 'rejected',
+          reject_reason: reason,
+          updated_at: new Date(),
+        },
+        $setOnInsert: {
+          created_at: new Date(),
+        },
+      },
+      { upsert: true }
+    );
+
+    // Delete the user account as requested
+    await User.findByIdAndDelete(user._id);
+
+    return successResponse(res, 200, 'Tài khoản đã bị từ chối và xóa thông tin đăng nhập thành công');
+  } catch (error) {
+    next(error);
   }
 };
 
 module.exports = {
-  listUsersHandler,
-  updateUserRoleHandler,
-  deactivateUserHandler,
-  listAttendanceHandler,
-  getPendingOrganizersHandler,
-  approveOrganizerHandler,
-  rejectOrganizerHandler
+  approveOrganizer,
+  getOrganizers,
+  rejectOrganizer,
 };
-

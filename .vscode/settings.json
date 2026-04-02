@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "C:/Users/ASUS/Desktop/QR-Based-Student-Event-Attendance-System/mobile-app/linux"
+    "cmake.sourceDirectory": "C:/Users/ASUS/Desktop/QR-Based-Student-Event-Attendance-System/mobile-app/linux",
+    "java.configuration.updateBuildConfiguration": "interactive"
 }

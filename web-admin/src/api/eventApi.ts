@@ -1,66 +1,64 @@
 import axiosClient from './axiosClient';
 
 export type Event = {
-  id: number;
+  id: string;
   title: string;
   description?: string | null;
-  images?: string | null;
+  images?: string[] | string | null;
   location: string;
   start_time: string;
   end_time: string;
   max_participants: number;
-  category_id?: number | null;
+  category_id?: string | null;
+  is_active?: boolean;
+  registration_count?: number;
+  attendance_count?: number;
 };
 
 export const eventApi = {
-  getEvents(params?: { page?: number; limit?: number }) {
+  getEvents(params?: { page?: number; limit?: number; search?: string }) {
     return axiosClient.get('/events', { params });
   },
 
-  getOrganizerEvents(params?: { page?: number; limit?: number }) {
+  getOrganizerEvents(params?: { page?: number; limit?: number; search?: string }) {
     return axiosClient.get('/events/organizer/events', { params });
   },
 
   async getAllEvents(isOrganizer = false) {
-    const all: any[] = [];
+    const all: Event[] = [];
     let page = 1;
     const limit = 100;
     const endpoint = isOrganizer ? '/events/organizer/events' : '/events';
-    // Backend uses pagination; loop until empty page
+
     while (true) {
       const res = await axiosClient.get(endpoint, { params: { page, limit } });
-      const payload = res.data?.data ?? res.data;
-      const items = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : [];
-      if (!items.length) break;
+      const items = res.data?.data ?? [];
+      if (!Array.isArray(items) || items.length === 0) break;
       all.push(...items);
       if (items.length < limit) break;
       page += 1;
     }
-    return all as Event[];
+
+    return all;
   },
 
-  getEvent(id: number) {
+  getEvent(id: string) {
     return axiosClient.get(`/events/${id}`);
   },
 
-  createEvent(payload: FormData) {
-    return axiosClient.post('/events', payload, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
+  createEvent(payload: Record<string, unknown>) {
+    return axiosClient.post('/events', payload);
   },
 
-  updateEvent(id: number, payload: FormData) {
-    return axiosClient.put(`/events/${id}`, payload, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
+  updateEvent(id: string, payload: Record<string, unknown>) {
+    return axiosClient.put(`/events/${id}`, payload);
   },
 
-  deleteEvent(id: number) {
+  deleteEvent(id: string) {
     return axiosClient.delete(`/events/${id}`);
   },
 
-  getEventRegistrations(id: number) {
+  getEventRegistrations(id: string) {
     return axiosClient.get(`/events/${id}/registrations`);
   },
 };
-

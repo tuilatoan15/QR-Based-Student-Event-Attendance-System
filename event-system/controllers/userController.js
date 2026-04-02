@@ -1,224 +1,439 @@
-const { sql, poolPromise } = require('../config/db');
-const { successResponse, errorResponse } = require('../utils/response');
-
-const getUserNotifications = async (req, res, next) => {
-  try {
-    const userId = req.user.id;
-    const pool = await poolPromise;
-
-    const result = await pool.request()
-      .input('user_id', sql.Int, userId)
-      .query(`
-        SELECT id, title, message, is_read, [type], event_id, created_at 
-        FROM notifications 
-        WHERE user_id = @user_id 
-        ORDER BY created_at DESC
-      `);
-
-    return successResponse(res, 200, 'Notifications retrieved successfully', result.recordset);
-  } catch (err) {
-    next(err);
-  }
-};
-
-const markNotificationAsRead = async (req, res, next) => {
-  try {
-    const userId = req.user.id;
-    const notifId = req.params.id;
-    const pool = await poolPromise;
-
-    await pool.request()
-      .input('user_id', sql.Int, userId)
-      .input('notif_id', sql.Int, notifId)
-      .query(`
-        UPDATE notifications 
-        SET is_read = 1 
-        WHERE id = @notif_id AND user_id = @user_id
-      `);
-
-    return successResponse(res, 200, 'Notification marked as read');
-  } catch (err) {
-    next(err);
-  }
-};
-
-const markAllNotificationsAsRead = async (req, res, next) => {
-  try {
-    const userId = req.user.id;
-    const pool = await poolPromise;
-
-    await pool.request()
-      .input('user_id', sql.Int, userId)
-      .query(`
-        UPDATE notifications 
-        SET is_read = 1 
-        WHERE user_id = @user_id AND is_read = 0
-      `);
-
-    return successResponse(res, 200, 'All notifications marked as read');
-  } catch (err) {
-    next(err);
-  }
-};
-
-const cloudinary = require('../config/cloudinary');
-
-const updateAvatar = async (req, res, next) => {
-  try {
-    if (!req.file) {
-      return errorResponse(res, 400, 'No file uploaded');
-    }
-
-    const userId = req.user.id;
-    
-    // Convert buffer to Base64 to upload to Cloudinary
-    const b64 = Buffer.from(req.file.buffer).toString('base64');
-    const dataURI = 'data:' + req.file.mimetype + ';base64,' + b64;
-
-    const result = await cloudinary.uploader.upload(dataURI, {
-      folder: 'avatars',
-      resource_type: 'image'
-    });
-
-    const avatarUrl = result.secure_url;
-    const pool = await poolPromise;
-
-    await pool.request()
-      .input('user_id', sql.Int, userId)
-      .input('avatar', sql.NVarChar(sql.MAX), avatarUrl)
-      .query('UPDATE users SET avatar = @avatar, updated_at = SYSUTCDATETIME() WHERE id = @user_id');
-
-    return successResponse(res, 200, 'Avatar updated successfully', { avatar: avatarUrl });
-  } catch (err) {
-    console.error('Avatar update error:', err);
-    next(err);
-  }
-};
-
+const User = require('../models/userModel');
 const bcrypt = require('bcrypt');
-const { findUserById, updateUserPassword } = require('../models/userModel');
+const { mongoose } = require('../config/db');
+const Event = require('../models/eventModel');
+const { Registration, REGISTRATION_STATUS } = require('../models/registrationModel');
+const Attendance = require('../models/attendanceModel');
+const { getPublicId } = require('../utils/clientFormat');
+const { successResponse, paginatedSuccessResponse, errorResponse } = require('../utils/response');
 
-const changePassword = async (req, res, next) => {
+const getOrganizerCollection = (req) => req.app.locals.db.collection('organizer_infos');
+const getNotificationsCollection = (req) => req.app.locals.db.collection('notifications');
+
+const buildOrganizerProfilePayload = (user, organizerInfo = null) => {
+  const profile = organizerInfo || user.organizer_profile || {};
+
+  return {
+    id: user.legacy_sql_id ?? user._id.toString(),
+    full_name: user.full_name,
+    email: user.email,
+    role: user.role,
+    avatar: user.avatar || null,
+    organization_name: profile.organization_name || '',
+    position: profile.position || '',
+    phone: profile.phone || '',
+    bio: profile.bio || '',
+    website: profile.website || '',
+    approval_status: profile.approval_status || 'pending',
+    reject_reason: profile.reject_reason || null,
+    organizer_profile: user.organizer_profile || null,
+  };
+};
+
+const listUsers = async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const { old_password, new_password } = req.body;
+    const page = Math.max(parseInt(req.query.page || '1', 10), 1);
+    const limit = Math.max(parseInt(req.query.limit || '20', 10), 1);
+    const skip = (page - 1) * limit;
+    const search = String(req.query.search || '').trim();
 
-    if (!old_password || !new_password) {
-      return errorResponse(res, 400, 'Mật khẩu cũ và mới là bắt buộc (old_password, new_password)');
+    const filter = {};
+    if (search) {
+      filter.$or = [
+        { full_name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { student_code: { $regex: search, $options: 'i' } },
+      ];
     }
 
-    if (new_password.length < 6) {
-      return errorResponse(res, 400, 'Mật khẩu mới phải từ 6 ký tự trở lên');
+    const [users, total] = await Promise.all([
+      User.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      User.countDocuments(filter),
+    ]);
+
+    const data = users.map((user) => ({
+      id: user._id.toString(),
+      full_name: user.full_name,
+      email: user.email,
+      student_code: user.student_code,
+      is_active: user.is_active,
+      role_name: user.role,
+      role: user.role,
+      avatar: user.avatar || null,
+      created_at: user.createdAt,
+      updated_at: user.updatedAt,
+    }));
+
+    return paginatedSuccessResponse(res, 200, 'Lấy danh sách người dùng thành công', data, {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateRole = async (req, res, next) => {
+  try {
+    const { role } = req.body;
+    if (!['admin', 'organizer', 'student'].includes(role)) {
+      return errorResponse(res, 400, 'Vai trò không hợp lệ');
     }
 
-    const user = await findUserById(userId);
+    const user = await User.findById(req.params.id);
     if (!user) {
       return errorResponse(res, 404, 'Không tìm thấy người dùng');
     }
 
-    const match = await bcrypt.compare(old_password, user.password_hash);
-    if (!match) {
-      return errorResponse(res, 400, 'Mật khẩu cũ không chính xác');
+    user.role = role;
+    if (role === 'organizer' && !user.organizer_profile) {
+      user.organizer_profile = {};
+    }
+    await user.save();
+
+    if (role === 'organizer') {
+      await getOrganizerCollection(req).updateOne(
+        { user_id: user._id },
+        {
+          $setOnInsert: {
+            user_id: user._id,
+            approval_status: 'approved',
+            created_at: new Date(),
+          },
+          $set: {
+            updated_at: new Date(),
+          },
+        },
+        { upsert: true }
+      );
     }
 
-    const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS || '10', 10);
-    const newPasswordHash = await bcrypt.hash(new_password, SALT_ROUNDS);
+    return successResponse(res, 200, 'Cập nhật vai trò thành công', {
+      id: user._id.toString(),
+      role: user.role,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
-    await updateUserPassword(userId, newPasswordHash);
+const setActive = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return errorResponse(res, 404, 'User not found');
+    }
 
-    return successResponse(res, 200, 'Đổi mật khẩu thành công');
-  } catch (err) {
-    next(err);
+    user.is_active = Boolean(req.body.is_active);
+    await user.save();
+
+    return successResponse(res, 200, 'Cập nhật trạng thái người dùng thành công', {
+      id: user._id.toString(),
+      is_active: user.is_active,
+    });
+  } catch (error) {
+    next(error);
   }
 };
 
 const getOrganizerProfile = async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const pool = await poolPromise;
-    const result = await pool.request()
-      .input('user_id', sql.Int, userId)
-      .query(`
-        SELECT u.id, u.full_name, u.email, u.avatar,
-               o.organization_name, o.position, o.phone, o.bio, o.website,
-               o.approval_status
-        FROM users u
-        LEFT JOIN organizer_info o ON u.id = o.user_id
-        WHERE u.id = @user_id
-      `);
-      
-    if (!result.recordset[0]) {
+    const user = await User.findById(req.user.id);
+    if (!user) {
       return errorResponse(res, 404, 'User not found');
     }
-    
-    return successResponse(res, 200, 'Organizer profile retrieved successfully', result.recordset[0]);
-  } catch (err) {
-    next(err);
+
+    const organizerInfo = await getOrganizerCollection(req).findOne({ user_id: user._id });
+
+    return successResponse(
+      res,
+      200,
+      'Lấy thông tin nhà tổ chức thành công',
+      buildOrganizerProfilePayload(user, organizerInfo)
+    );
+  } catch (error) {
+    next(error);
   }
 };
 
 const updateOrganizerProfile = async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const { full_name, organization_name, position, phone, bio, website } = req.body;
-    
-    const pool = await poolPromise;
-    
-    if (full_name) {
-      await pool.request()
-        .input('user_id', sql.Int, userId)
-        .input('full_name', sql.NVarChar(255), full_name)
-        .query('UPDATE users SET full_name = @full_name, updated_at = SYSUTCDATETIME() WHERE id = @user_id');
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return errorResponse(res, 404, 'User not found');
     }
 
-    if (organization_name !== undefined || position !== undefined || phone !== undefined || bio !== undefined || website !== undefined) {
-      // Ensure organizer_info exists
-      const checkOrg = await pool.request()
-        .input('check_uid', sql.Int, userId)
-        .query('SELECT id FROM organizer_info WHERE user_id = @check_uid');
-      if (checkOrg.recordset.length === 0) {
-        await pool.request()
-          .input('new_uid', sql.Int, userId)
-          .query("INSERT INTO organizer_info (user_id, approval_status, created_at, updated_at) VALUES (@new_uid, 'approved', GETDATE(), GETDATE())");
-      }
+    const allowedFields = ['organization_name', 'position', 'phone', 'bio', 'website'];
+    const profile = { ...(user.organizer_profile || {}) };
 
-      const request = pool.request().input('user_id', sql.Int, userId);
-      const updates = [];
-      if (organization_name !== undefined) { updates.push('organization_name = @org_name'); request.input('org_name', sql.NVarChar(255), organization_name); }
-      if (position !== undefined) { updates.push('position = @pos'); request.input('pos', sql.NVarChar(255), position); }
-      if (phone !== undefined) { updates.push('phone = @phone'); request.input('phone', sql.VarChar(20), phone); }
-      if (bio !== undefined) { updates.push('bio = @bio'); request.input('bio', sql.NVarChar(sql.MAX), bio); }
-      if (website !== undefined) { updates.push('website = @web'); request.input('web', sql.NVarChar(255), website); }
-      
-      if (updates.length > 0) {
-        updates.push('updated_at = GETDATE()');
-        await request.query(`UPDATE organizer_info SET ${updates.join(', ')} WHERE user_id = @user_id`);
+    allowedFields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        profile[field] = req.body[field];
       }
+    });
+
+    if (req.body.full_name !== undefined) {
+      user.full_name = req.body.full_name;
     }
-    
-    const result = await pool.request()
-      .input('user_id', sql.Int, userId)
-      .query(`
-        SELECT u.id, u.full_name, u.email, u.avatar,
-               o.organization_name, o.position, o.phone, o.bio, o.website,
-               o.approval_status
-        FROM users u
-        LEFT JOIN organizer_info o ON u.id = o.user_id
-        WHERE u.id = @user_id
-      `);
 
-    return successResponse(res, 200, 'Cập nhật thành công', result.recordset[0]);
-  } catch (err) {
-    next(err);
+    user.organizer_profile = profile;
+    if (user.role !== 'organizer') {
+      user.role = 'organizer';
+    }
+    await user.save();
+
+    await getOrganizerCollection(req).updateOne(
+      { user_id: user._id },
+      {
+        $set: {
+          user_id: user._id,
+          organization_name: profile.organization_name || null,
+          position: profile.position || null,
+          phone: profile.phone || null,
+          bio: profile.bio || null,
+          website: profile.website || null,
+          updated_at: new Date(),
+        },
+        $setOnInsert: {
+          approval_status: 'pending',
+          created_at: new Date(),
+        },
+      },
+      { upsert: true }
+    );
+
+    const organizerInfo = await getOrganizerCollection(req).findOne({ user_id: user._id });
+
+    return successResponse(
+      res,
+      200,
+      'Cập nhật thông tin nhà tổ chức thành công',
+      buildOrganizerProfilePayload(user, organizerInfo)
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateMyAvatar = async (req, res, next) => {
+  try {
+    let avatarUrl = '';
+    
+    // Check if file was uploaded via Multer/Cloudinary
+    if (req.file && req.file.path) {
+      avatarUrl = req.file.path;
+    } 
+    // Otherwise check for URL string in body
+    else if (req.body.avatar) {
+      avatarUrl = typeof req.body.avatar === 'string' ? req.body.avatar.trim() : '';
+    }
+
+    if (!avatarUrl) {
+      return errorResponse(res, 400, 'Yêu cầu cung cấp ảnh đại diện (file hoặc URL)');
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return errorResponse(res, 404, 'User not found');
+    }
+
+    user.avatar = avatarUrl;
+    await user.save();
+
+    return successResponse(res, 200, 'Cập nhật ảnh đại diện thành công', {
+      id: getPublicId(user, req),
+      avatar: user.avatar,
+      secure_url: user.avatar,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getMyEvents = async (req, res, next) => {
+  try {
+    const currentUser = await User.findById(req.user.id).select('_id legacy_sql_id').lean();
+    if (!currentUser) {
+      return errorResponse(res, 404, 'User not found');
+    }
+
+    const registrations = await Registration.find({
+      user_id: req.user.id,
+      status: { $ne: REGISTRATION_STATUS.CANCELLED },
+    })
+      .populate('event_id')
+      .lean();
+
+    const attendanceMap = new Map(
+      (
+        await Attendance.find({
+          registration_id: { $in: registrations.map((item) => item._id) },
+        })
+          .select('registration_id checkin_time')
+          .lean()
+      ).map((item) => [item.registration_id.toString(), item])
+    );
+
+    const data = registrations
+      .filter((item) => item.event_id)
+      .map((registration) => ({
+        id: registration.event_id.legacy_sql_id ?? registration.event_id._id.toString(),
+        mongo_id: registration.event_id._id.toString(),
+        title: registration.event_id.title,
+        description: registration.event_id.description,
+        location: registration.event_id.location,
+        start_time: registration.event_id.start_time,
+        end_time: registration.event_id.end_time,
+        max_participants: registration.event_id.max_participants,
+        images: registration.event_id.images || [],
+        registered_count: registration.registration_count ?? null,
+        checked_in_count: null,
+        registration: {
+          id: getPublicId(registration, req),
+          mongo_id: registration._id.toString(),
+          user_id: currentUser.legacy_sql_id ?? currentUser._id.toString(),
+          event_id: registration.event_id.legacy_sql_id ?? registration.event_id._id.toString(),
+          qr_token: registration.qr_token,
+          status: registration.status,
+          registered_at: registration.registered_at,
+          check_in_time:
+            attendanceMap.get(registration._id.toString())?.checkin_time || null,
+        },
+        qr_code: registration.qr_token,
+      }));
+
+    return successResponse(res, 200, 'Lấy danh sách sự kiện của tôi thành công', data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getMyNotifications = async (req, res, next) => {
+  try {
+    const items = await getNotificationsCollection(req)
+      .find({ user_id: new mongoose.Types.ObjectId(req.user.id) })
+      .sort({ created_at: -1 })
+      .toArray();
+
+    const rawEventIds = items
+      .map((item) => item.event_id)
+      .filter((value) => mongoose.Types.ObjectId.isValid(value))
+      .map((value) => new mongoose.Types.ObjectId(value));
+    const eventDocs = rawEventIds.length
+      ? await Event.find({ _id: { $in: rawEventIds } }).select('_id legacy_sql_id').lean()
+      : [];
+    const eventIdMap = new Map(
+      eventDocs.map((event) => [event._id.toString(), event.legacy_sql_id ?? event._id.toString()])
+    );
+
+    const data = items.map((item) => ({
+      id: item.legacy_sql_id ?? item._id.toString(),
+      mongo_id: item._id.toString(),
+      title: item.title,
+      message: item.message,
+      is_read: Boolean(item.is_read),
+      created_at: item.created_at || new Date().toISOString(),
+      type: item.type || null,
+      event_id:
+        item.event_id && eventIdMap.has(item.event_id.toString())
+          ? eventIdMap.get(item.event_id.toString())
+          : item.event_id || null,
+    }));
+
+    return successResponse(res, 200, 'Lấy danh sách thông báo thành công', data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const markNotificationRead = async (req, res, next) => {
+  try {
+    const numericId = Number(req.params.id);
+    const notificationFilter = {
+      user_id: new mongoose.Types.ObjectId(req.user.id),
+      $or: [],
+    };
+
+    if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+      notificationFilter.$or.push({ _id: new mongoose.Types.ObjectId(req.params.id) });
+    }
+
+    if (!Number.isNaN(numericId)) {
+      notificationFilter.$or.push({ legacy_sql_id: numericId });
+    }
+
+    if (!notificationFilter.$or.length) {
+      return errorResponse(res, 400, 'ID thông báo không hợp lệ');
+    }
+
+    const result = await getNotificationsCollection(req).findOneAndUpdate(
+      notificationFilter,
+      { $set: { is_read: true } },
+      { returnDocument: 'after' }
+    );
+
+    // MongoDB driver v6 (Mongoose 8) returns the document directly, not wrapped in .value
+    if (!result) {
+      return errorResponse(res, 404, 'Không tìm thấy thông báo');
+    }
+
+    return successResponse(res, 200, 'Đã đánh dấu thông báo là đã đọc');
+  } catch (error) {
+    next(error);
+  }
+};
+
+const markAllNotificationsRead = async (req, res, next) => {
+  try {
+    await getNotificationsCollection(req).updateMany(
+      { user_id: new mongoose.Types.ObjectId(req.user.id), is_read: { $ne: true } },
+      { $set: { is_read: true } }
+    );
+
+    return successResponse(res, 200, 'Đã đánh dấu tất cả thông báo là đã đọc');
+  } catch (error) {
+    next(error);
+  }
+};
+
+const changePassword = async (req, res, next) => {
+  try {
+    const { old_password, new_password } = req.body;
+    if (!old_password || !new_password) {
+      return errorResponse(res, 400, 'Yêu cầu nhập mật khẩu cũ và mới');
+    }
+
+    const user = await User.findById(req.user.id).select('+password_hash');
+    if (!user) {
+      return errorResponse(res, 404, 'User not found');
+    }
+
+    const matches = await bcrypt.compare(old_password, user.password_hash);
+    if (!matches) {
+      return errorResponse(res, 400, 'Mật khẩu cũ không chính xác');
+    }
+
+    user.password_hash = await bcrypt.hash(new_password, 10);
+    await user.save();
+
+    return successResponse(res, 200, 'Cập nhật mật khẩu thành công');
+  } catch (error) {
+    next(error);
   }
 };
 
 module.exports = {
-  getUserNotifications,
-  markNotificationAsRead,
-  markAllNotificationsAsRead,
-  updateAvatar,
   changePassword,
   getOrganizerProfile,
-  updateOrganizerProfile
+  getMyEvents,
+  getMyNotifications,
+  listUsers,
+  markAllNotificationsRead,
+  markNotificationRead,
+  setActive,
+  updateMyAvatar,
+  updateOrganizerProfile,
+  updateRole,
 };

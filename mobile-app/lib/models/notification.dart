@@ -1,11 +1,11 @@
 class AppNotification {
-  final int id;
+  final String id;
   final String title;
   final String message;
   final bool isRead;
   final DateTime createdAt;
   final String? type;
-  final int? eventId;
+  final String? eventId;
 
   AppNotification({
     required this.id,
@@ -19,13 +19,13 @@ class AppNotification {
 
   factory AppNotification.fromJson(Map<String, dynamic> json) {
     return AppNotification(
-      id: json['id'],
+      id: (json['id'] ?? json['_id'] ?? '').toString(),
       title: json['title'] ?? '',
       message: json['message'] ?? '',
       isRead: json['is_read'] == true || json['is_read'] == 1,
-      createdAt: DateTime.parse(json['created_at']),
+      createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()),
       type: json['type'],
-      eventId: json['event_id'],
+      eventId: json['event_id']?.toString(),
     );
   }
 }

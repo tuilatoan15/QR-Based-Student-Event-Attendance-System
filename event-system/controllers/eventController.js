@@ -1,485 +1,486 @@
-const {
-  createEvent,
-  getAllEvents,
-  getEventById,
-  getEventsByOrganizer,
-  getEventParticipants: getEventParticipantsModel,
-  updateEvent,
-  softDeleteEvent,
-  countRegistrationsForEvent,
-  countAllEvents,
-  countEventsByOrganizer
-} = require('../models/eventModel');
-const {
-  createRegistration,
-  findRegistrationByUserAndEvent,
-  getRegistrationsByUserWithEvents,
-  getRegistrationsForEvent,
-  getAttendancesForEvent,
-  updateRegistrationStatus,
-  deleteAttendanceByRegistrationId,
-  REGISTRATION_STATUS
-} = require('../models/registrationModel');
+const Event = require('../models/eventModel');
+const User = require('../models/userModel');
+const { Registration, REGISTRATION_STATUS } = require('../models/registrationModel');
+const Attendance = require('../models/attendanceModel');
 const qrService = require('../services/qrService');
-const { successResponse, paginatedSuccessResponse, errorResponse } = require('../utils/response');
-const googleSheetService = require('../services/googleSheetService');
-const { findUserById } = require('../models/userModel');
-const { createNotification } = require('../models/notificationModel');
-const sanitizeHtml = require('sanitize-html');
-const cloudinary = require('../config/cloudinary');
+const notificationService = require('../services/notificationService');
+const { buildLegacyOrObjectIdQuery } = require('../utils/legacyId');
+const { nextLegacySqlId } = require('../utils/legacySequence');
+const { getPublicId } = require('../utils/clientFormat');
+const {
+  successResponse,
+  paginatedSuccessResponse,
+  errorResponse,
+} = require('../utils/response');
 
-const sanitizeOptions = {
-  allowedTags: sanitizeHtml.defaults.allowedTags.concat([ 'img' ]),
-  allowedAttributes: {
-    ...sanitizeHtml.defaults.allowedAttributes,
-    'img': [ 'src', 'alt', 'width', 'height', 'style' ],
-    '*': ['style']
+// Bộ nhớ đệm đơn giản cho thống kê (Sát thủ tốc độ)
+const statsCache = new Map();
+const CACHE_TTL = 300000; // 5 phút
+
+const getCachedStatsCount = (key) => {
+  const cached = statsCache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
   }
+  return null;
+};
+
+const setStatsCache = (key, data) => {
+  statsCache.set(key, { data, timestamp: Date.now() });
+};
+
+const eventPopulate = {
+  path: 'created_by',
+  select: 'full_name email role student_code legacy_sql_id',
+};
+
+const buildCountMaps = async (eventIds) => {
+  if (!eventIds.length) {
+    return { registrationMap: new Map(), attendanceMap: new Map() };
+  }
+
+  const cacheKey = eventIds.sort().join(',');
+  const cached = getCachedStatsCount(cacheKey);
+  if (cached) return cached;
+
+  const [registrationCounts, attendanceCounts] = await Promise.all([
+    Registration.aggregate([
+      { $match: { event_id: { $in: eventIds }, status: { $ne: REGISTRATION_STATUS.CANCELLED } } },
+      { $group: { _id: '$event_id', count: { $sum: 1 } } },
+    ]),
+    Attendance.aggregate([
+      { $match: { event_id: { $in: eventIds } } },
+      { $group: { _id: '$event_id', count: { $sum: 1 } } },
+    ]),
+  ]);
+
+  const result = {
+    registrationMap: new Map(registrationCounts.map((item) => [item._id.toString(), item.count])),
+    attendanceMap: new Map(attendanceCounts.map((item) => [item._id.toString(), item.count])),
+  };
+
+  setStatsCache(cacheKey, result);
+  return result;
+};
+
+const serializeEvent = (eventDocument, req, countMaps, isList = false) => {
+  const eventId = eventDocument._id ? eventDocument._id.toString() : eventDocument.id;
+  const registrationCount = countMaps?.registrationMap?.get(eventId) ?? 0;
+  const attendanceCount = countMaps?.attendanceMap?.get(eventId) ?? 0;
+
+  return {
+    id: getPublicId(eventDocument, req),
+    mongo_id: eventId,
+    title: eventDocument.title,
+    // Hiện lại phần mô tả (rút gọn nếu là danh sách để tối ưu tốc độ)
+    description: isList && eventDocument.description 
+      ? (eventDocument.description.length > 100 ? eventDocument.description.substring(0, 100) + '...' : eventDocument.description)
+      : (eventDocument.description || ""),
+    // Trả về 1 ảnh banner cho danh sách
+    images: Array.isArray(eventDocument.images) ? eventDocument.images : [],
+    location: eventDocument.location,
+    start_time: eventDocument.start_time,
+    end_time: eventDocument.end_time,
+    max_participants: eventDocument.max_participants,
+    is_active: eventDocument.is_active,
+    registration_count: registrationCount,
+    registered_count: registrationCount,
+    attendance_count: attendanceCount,
+    checked_in_count: attendanceCount,
+  };
+};
+
+const listEventsWithCounts = async (req, filter, sort, page, limit) => {
+  const skip = (page - 1) * limit;
+  const [events, total] = await Promise.all([
+    Event.find(filter)
+      .populate(eventPopulate)
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    Event.countDocuments(filter),
+  ]);
+
+  const countMaps = await buildCountMaps(events.map((event) => event._id));
+  const data = events.map((event) => serializeEvent(event, req, countMaps, true));
+
+  return {
+    data,
+    total,
+  };
 };
 
 const getEvents = async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 10;
-
-    const safePage = Number.isInteger(page) && page > 0 ? page : 1;
-    const safeLimit = Number.isInteger(limit) && limit > 0 ? limit : 10;
-    const offset = (safePage - 1) * safeLimit;
-
-    const events = await getAllEvents(offset, safeLimit);
-    const total = await countAllEvents();
-    const totalPages = Math.ceil(total / safeLimit);
-
-    return paginatedSuccessResponse(res, 200, 'Events retrieved successfully', events, {
-      page: safePage,
-      limit: safeLimit,
-      total,
-      totalPages
-    });
-  } catch (err) {
-    next(err);
-  }
-};
-
-const getEventByIdHandler = async (req, res, next) => {
-  try {
-    const id = req.params.id;
-    const event = await getEventById(id);
-    if (!event) {
-      return errorResponse(res, 404, 'Event not found');
-    }
-    return successResponse(res, 200, 'Event retrieved successfully', event);
-  } catch (err) {
-    next(err);
-  }
-};
-
-const createEventHandler = async (req, res, next) => {
-  try {
-    const { title, description, location, start_time, end_time, max_participants, category_id } = req.body;
-
-    const sanitizedDescription = description ? sanitizeHtml(description, sanitizeOptions) : null;
-    let imagesUrlStr = null;
-    if (req.files && req.files.length > 0) {
-      const uploadPromises = req.files.map(file => {
-        const b64 = Buffer.from(file.buffer).toString('base64');
-        const dataURI = 'data:' + file.mimetype + ';base64,' + b64;
-        return cloudinary.uploader.upload(dataURI, { folder: 'events', resource_type: 'image' });
-      });
-      const results = await Promise.all(uploadPromises);
-      const urls = results.map(r => r.secure_url);
-      imagesUrlStr = JSON.stringify(urls);
-    }
-
-    // Create Google Sheet first
-    let sheetInfo = null;
-    try {
-      // We'll create the sheet after getting the event ID, so for now just prepare
-      // The sheet will be created after the event is inserted
-    } catch (sheetError) {
-      console.error('Error preparing Google Sheet:', sheetError);
-      // Continue with event creation even if sheet fails
-    }
-
-    // Create event in database
-    const eventId = await createEvent({
-      title,
-      description: sanitizedDescription,
-      images: imagesUrlStr,
-      location,
-      start_time,
-      end_time,
-      max_participants,
-      category_id: category_id || null,
-      created_by: req.user.id,
-      google_sheet_id: null, // Will update after sheet creation
-      google_sheet_name: null // Will update after sheet creation
-    });
-
-    // Now create the Google Sheet with the event ID
-    try {
-      sheetInfo = await googleSheetService.createEventSheet(title, eventId);
-
-      // Update the event with Google Sheet information
-      await updateEvent(eventId, {
-        google_sheet_id: sheetInfo.sheetId,
-        google_sheet_name: sheetInfo.sheetName
-      });
-    } catch (sheetError) {
-      console.error('Error creating Google Sheet:', sheetError);
-      // Event is created but without Google Sheet - could be updated later
-    }
-
-    const response = {
-      id: eventId,
-      title,
-      description: sanitizedDescription,
-      images: imagesUrlStr ? JSON.parse(imagesUrlStr) : null,
-      location,
-      start_time,
-      end_time,
-      max_participants,
-      category_id,
-      created_by: req.user.id
-    };
-
-    if (sheetInfo) {
-      response.google_sheet = {
-        id: sheetInfo.sheetId,
-        name: sheetInfo.sheetName,
-        url: sheetInfo.url
-      };
-    }
-
-    return successResponse(res, 201, 'Event created successfully', response);
-  } catch (err) {
-    next(err);
-  }
-};
-
-const updateEventHandler = async (req, res, next) => {
-  try {
-    const id = req.params.id;
-
-    const event = await getEventById(id);
-    if (!event) {
-      return errorResponse(res, 404, 'Event not found');
-    }
-
-    // Check ownership
-    if (req.user.role !== 'admin' && event.created_by !== req.user.id) {
-      return errorResponse(res, 403, 'Permission denied: This event does not belong to you');
-    }
-
-    const { title, description, location, start_time, end_time, max_participants, category_id, is_active } = req.body;
+    const page = Math.max(parseInt(req.query.page || '1', 10), 1);
+    const limit = Math.max(parseInt(req.query.limit || '10', 10), 1);
+    const search = String(req.query.search || '').trim();
     
-    let sanitizedDescription = undefined;
-    if (description !== undefined) {
-      sanitizedDescription = description ? sanitizeHtml(description, sanitizeOptions) : null;
+    const filter = { is_active: true };
+    if (search) {
+      filter.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { location: { $regex: search, $options: 'i' } }
+      ];
     }
 
-    let imagesUrlStr = undefined;
-    if (req.files && req.files.length > 0) {
-      const uploadPromises = req.files.map(file => {
-        const b64 = Buffer.from(file.buffer).toString('base64');
-        const dataURI = 'data:' + file.mimetype + ';base64,' + b64;
-        return cloudinary.uploader.upload(dataURI, { folder: 'events', resource_type: 'image' });
-      });
-      const results = await Promise.all(uploadPromises);
-      const newUrls = results.map(r => r.secure_url);
-      
-      let finalUrls = newUrls;
-      if (req.body.images) {
-        try {
-          const oldUrls = JSON.parse(req.body.images);
-          if (Array.isArray(oldUrls)) {
-            finalUrls = [...oldUrls, ...newUrls];
-          }
-        } catch(e) { }
-      }
-      imagesUrlStr = JSON.stringify(finalUrls);
-    } else if (req.body.images !== undefined) {
-      imagesUrlStr = req.body.images;
-    }
+    const { data, total } = await listEventsWithCounts(
+      req,
+      filter,
+      { start_time: 1 },
+      page,
+      limit
+    );
 
-    const fields = {};
-    if (title != null) fields.title = title;
-    if (sanitizedDescription !== undefined) fields.description = sanitizedDescription;
-    if (imagesUrlStr !== undefined) fields.images = imagesUrlStr;
-    if (location != null) fields.location = location;
-    if (start_time != null) fields.start_time = start_time;
-    if (end_time != null) fields.end_time = end_time;
-    if (max_participants != null) fields.max_participants = max_participants;
-    if (category_id != null) fields.category_id = category_id;
-    if (is_active !== undefined) fields.is_active = is_active;
-
-    await updateEvent(id, fields);
-    return successResponse(res, 200, 'Event updated successfully', { id });
-  } catch (err) {
-    next(err);
+    return paginatedSuccessResponse(res, 200, 'Lấy danh sách sự kiện thành công', data, {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    });
+  } catch (error) {
+    next(error);
   }
 };
 
-const deleteEvent = async (req, res, next) => {
+const getEventById = async (req, res, next) => {
   try {
-    const id = req.params.id;
-
-    const event = await getEventById(id);
+    const event = await Event.findOne(buildLegacyOrObjectIdQuery(req.params.id))
+      .populate(eventPopulate)
+      .lean();
     if (!event) {
-      return errorResponse(res, 404, 'Event not found');
+      return errorResponse(res, 404, 'Không tìm thấy sự kiện');
     }
 
-    // Check ownership
-    if (req.user.role !== 'admin' && event.created_by !== req.user.id) {
-      return errorResponse(res, 403, 'Permission denied: This event does not belong to you');
-    }
+    const countMaps = await buildCountMaps([event._id]);
+    return successResponse(
+      res,
+      200,
+      'Lấy thông tin sự kiện thành công',
+      serializeEvent(event, req, countMaps)
+    );
+  } catch (error) {
+    next(error);
+  }
+};
 
-    await softDeleteEvent(id);
-    return successResponse(res, 200, 'Event deleted successfully', { id });
-  } catch (err) {
-    next(err);
+const createEvent = async (req, res, next) => {
+  try {
+    const legacy_sql_id = await nextLegacySqlId(req.app.locals.db, 'events');
+    const event = await Event.create({
+      legacy_sql_id,
+      title: req.body.title,
+      description: req.body.description || '',
+      location: req.body.location,
+      start_time: req.body.start_time,
+      end_time: req.body.end_time,
+      max_participants: req.body.max_participants,
+      category_id: req.body.category_id || null,
+      images: Array.isArray(req.body.images) ? req.body.images : [],
+      created_by: req.user.id,
+    });
+
+    const populatedEvent = await Event.findById(event._id).populate(eventPopulate).lean();
+    const countMaps = await buildCountMaps([event._id]);
+    return successResponse(
+      res,
+      201,
+      'Tạo sự kiện thành công',
+      serializeEvent(populatedEvent, req, countMaps)
+    );
+  } catch (error) {
+    next(error);
   }
 };
 
 const registerForEvent = async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const eventId = req.params.id;
-
-    const event = await getEventById(eventId);
-    if (!event) {
-      return errorResponse(res, 404, 'Event not found');
-    }
-    if (!event.is_active) {
-      return errorResponse(res, 409, 'Event is not active');
+    const event = await Event.findOne(buildLegacyOrObjectIdQuery(req.params.id));
+    if (!event || !event.is_active) {
+      return errorResponse(res, 404, 'Không tìm thấy sự kiện');
     }
 
-    const existing = await findRegistrationByUserAndEvent(userId, eventId);
-    if (existing && existing.status !== REGISTRATION_STATUS.CANCELLED) {
-      return errorResponse(res, 409, 'Already registered for this event');
-    }
-
-    const count = await countRegistrationsForEvent(eventId);
-    if (count >= event.max_participants) {
-      return errorResponse(res, 409, 'Event is full');
-    }
-
-    // Get user info for Google Sheet
-    const user = await findUserById(userId);
+    const user = await User.findById(req.user.id);
     if (!user) {
-      return errorResponse(res, 404, 'User not found');
+      return errorResponse(res, 404, 'Không tìm thấy người dùng');
     }
+
+    const existingRegistration = await Registration.findOne({
+      user_id: req.user.id,
+      event_id: event._id,
+    });
+
+    if (existingRegistration && existingRegistration.status !== REGISTRATION_STATUS.CANCELLED) {
+      return errorResponse(res, 409, 'Bạn đã đăng ký sự kiện này rồi');
+    }
+
+    const registrationCount = await Registration.countDocuments({
+      event_id: event._id,
+      status: { $ne: REGISTRATION_STATUS.CANCELLED },
+    });
+
+    if (registrationCount >= event.max_participants) {
+      return errorResponse(res, 409, 'Sự kiện đã hết chỗ');
+    }
+
+    const qr_token = qrService.generateQrToken();
 
     let registration;
-    let qr_token;
-    if (existing && existing.status === REGISTRATION_STATUS.CANCELLED) {
-      // Re-register by updating status
-      await updateRegistrationStatus(existing.id, REGISTRATION_STATUS.REGISTERED);
-      registration = { ...existing, status: REGISTRATION_STATUS.REGISTERED };
-      qr_token = existing.qr_token;
+    if (existingRegistration) {
+      existingRegistration.status = REGISTRATION_STATUS.REGISTERED;
+      existingRegistration.qr_token = qr_token;
+      existingRegistration.registered_at = new Date();
+      registration = await existingRegistration.save();
     } else {
-      // New registration - registration data is stored in registrations table
-      qr_token = qrService.generateQrToken();
-      registration = await createRegistration({ user_id: userId, event_id: eventId, qr_token });
-    }
-
-    // Add to Google Sheet (user info is now only stored with registration, not in a separate event_members table)
-    try {
-      if (event.google_sheet_name) {
-        await googleSheetService.addStudentToSheet(event.google_sheet_name, {
-          student_name: user.full_name,
-          student_code: user.student_code || '',
-          email: user.email,
-          qr_token: qr_token
-        });
-      }
-    } catch (sheetError) {
-      console.error('Error adding student to Google Sheet:', sheetError);
-      // Don't fail registration if sheet update fails
+      registration = await Registration.create({
+        legacy_sql_id: await nextLegacySqlId(req.app.locals.db, 'registrations'),
+        user_id: req.user.id,
+        event_id: event._id,
+        qr_token,
+      });
     }
 
     const qr_code = await qrService.generateQRCodeDataURL(qr_token);
 
-    try {
-      await createNotification({
-        user_id: userId,
-        title: 'Đăng ký sự kiện thành công',
-        message: `Bạn đã đăng ký tham gia sự kiện "${event.title}" thành công.`,
-        type: 'registration',
-        event_id: eventId
-      });
-    } catch (notifError) {
-      console.error('Error creating registration notification:', notifError);
-    }
+    // Send notification
+    await notificationService.sendNotification(
+      req.app.locals.db,
+      req.user.id,
+      'Đăng ký thành công!',
+      `Bạn đã đăng ký tham gia sự kiện: ${event.title}`,
+      'registration',
+      event._id
+    );
 
-    return successResponse(res, 201, 'Registered successfully', {
-      registration: { id: registration.id, event_id: eventId, user_id: userId },
-      qr_token: qr_token,
-      qr_code
+    return successResponse(res, 201, 'Đăng ký tham gia thành công', {
+      registration: {
+        id: getPublicId(registration, req),
+        mongo_id: registration._id.toString(),
+        event_id: getPublicId(event, req),
+        event_mongo_id: event._id.toString(),
+        user_id: getPublicId(user, req),
+        user_mongo_id: user._id.toString(),
+        qr_token: registration.qr_token,
+        status: registration.status,
+        registered_at: registration.registered_at,
+      },
+      qr_token,
+      qr_code,
     });
-  } catch (err) {
-    if (err.number === 2627 || err.number === 2601) {
-      return errorResponse(res, 409, 'Already registered for this event');
+  } catch (error) {
+    if (error.code === 11000) {
+      return errorResponse(res, 409, 'Bạn đã đăng ký sự kiện này rồi');
     }
-    next(err);
-  }
-};
-
-const getUserEvents = async (req, res, next) => {
-  try {
-    const userId = req.user.id;
-    const events = await getRegistrationsByUserWithEvents(userId);
-    return successResponse(res, 200, 'User events retrieved successfully', events);
-  } catch (err) {
-    next(err);
-  }
-};
-
-const getEventRegistrations = async (req, res, next) => {
-  try {
-    const eventId = req.params.id;
-    const event = await getEventById(eventId);
-    if (!event) {
-      return errorResponse(res, 404, 'Event not found');
-    }
-
-    // Check ownership
-    if (req.user.role !== 'admin' && event.created_by !== req.user.id) {
-      return errorResponse(res, 403, 'Permission denied: This event does not belong to you');
-    }
-
-    const list = await getRegistrationsForEvent(eventId);
-    return successResponse(res, 200, 'Registrations retrieved successfully', list);
-  } catch (err) {
-    next(err);
+    next(error);
   }
 };
 
 const cancelRegistration = async (req, res, next) => {
   try {
-    const eventId = req.params.id;
-    const userId = req.user.id;
+    const event = await Event.findOne(buildLegacyOrObjectIdQuery(req.params.id));
+    if (!event) {
+      return errorResponse(res, 404, 'Không tìm thấy sự kiện');
+    }
 
-    const registration = await findRegistrationByUserAndEvent(userId, eventId);
+    const registration = await Registration.findOne({
+      user_id: req.user.id,
+      event_id: event._id,
+      status: { $ne: REGISTRATION_STATUS.CANCELLED },
+    });
+
     if (!registration) {
-      return errorResponse(res, 404, 'Registration not found');
+      return errorResponse(res, 404, 'Không tìm thấy thông tin đăng ký');
     }
 
-    if (registration.status === REGISTRATION_STATUS.CANCELLED) {
-      return errorResponse(res, 400, 'Registration is already cancelled');
-    }
+    registration.status = REGISTRATION_STATUS.CANCELLED;
+    await registration.save();
 
-    await updateRegistrationStatus(registration.id, REGISTRATION_STATUS.CANCELLED);
-    // Also delete attendance if exists, so they can re-register and re-checkin
-    await deleteAttendanceByRegistrationId(registration.id);
+    // Delete attendance record if it exists
+    await Attendance.deleteMany({ registration_id: registration._id });
 
-    // Create notification
-    try {
-      const event = await getEventById(eventId);
-      if (event) {
-        await createNotification({
-          user_id: userId,
-          title: 'Huỷ đăng ký sự kiện',
-          message: `Bạn đã huỷ đăng ký tham gia sự kiện "${event.title}".`,
-          type: 'cancellation',
-          event_id: eventId
-        });
-      }
-    } catch (notifError) {
-      console.error('Error creating cancellation notification:', notifError);
-    }
+    // Send notification
+    await notificationService.sendNotification(
+      req.app.locals.db,
+      req.user.id,
+      'Đã hủy đăng ký',
+      `Bạn đã hủy đăng ký tham gia sự kiện: ${event.title}`,
+      'cancellation',
+      event._id
+    );
 
-    return successResponse(res, 200, 'Registration cancelled successfully');
-  } catch (err) {
-    next(err);
+    return successResponse(res, 200, 'Đã hủy đăng ký thành công', {
+      id: getPublicId(registration, req),
+      event_id: getPublicId(event, req),
+      status: registration.status,
+    });
+  } catch (error) {
+    next(error);
   }
 };
 
-const getEventAttendances = async (req, res, next) => {
+const getEventRegistrations = async (req, res, next) => {
   try {
-    const eventId = req.params.id;
-    const event = await getEventById(eventId);
+    const event = await Event.findOne(buildLegacyOrObjectIdQuery(req.params.id)).lean();
     if (!event) {
-      return errorResponse(res, 404, 'Event not found');
+      return errorResponse(res, 404, 'Không tìm thấy sự kiện');
     }
 
-    // Check ownership
-    if (req.user.role !== 'admin' && event.created_by !== req.user.id) {
-      return errorResponse(res, 403, 'Permission denied: This event does not belong to you');
+    if (req.user.role !== 'admin' && event.created_by.toString() !== req.user.id) {
+      return errorResponse(res, 403, 'Bạn không có quyền truy cập sự kiện này');
     }
 
-    const list = await getAttendancesForEvent(eventId);
-    return successResponse(res, 200, 'Attendances retrieved successfully', list);
-  } catch (err) {
-    next(err);
+    const registrations = await Registration.find({ event_id: event._id })
+      .populate('user_id', 'full_name email student_code role avatar legacy_sql_id')
+      .populate('event_id', 'title start_time end_time location legacy_sql_id')
+      .lean();
+    const attendances = await Attendance.find({ event_id: event._id })
+      .select('registration_id checkin_time')
+      .lean();
+    const attendanceMap = new Map(
+      attendances.map((item) => [item.registration_id.toString(), item.checkin_time])
+    );
+
+    const data = registrations.map((registration) => ({
+      id: getPublicId(registration, req),
+      mongo_id: registration._id.toString(),
+      registration_id: getPublicId(registration, req),
+      registration_mongo_id: registration._id.toString(),
+      registration_status: registration.status,
+      status:
+        registration.status === REGISTRATION_STATUS.ATTENDED
+          ? 'checked_in'
+          : registration.status,
+      registered_at: registration.registered_at,
+      avatar: registration.user_id?.avatar || null,
+      checkin_time: attendanceMap.get(registration._id.toString()) || null,
+      check_in_time: attendanceMap.get(registration._id.toString()) || null,
+      student_name: registration.user_id?.full_name || null,
+      full_name: registration.user_id?.full_name || null,
+      email: registration.user_id?.email || null,
+      student_code: registration.user_id?.student_code || null,
+      user_id: registration.user_id?.legacy_sql_id ?? registration.user_id?._id?.toString() ?? null,
+      user_mongo_id: registration.user_id?._id?.toString() || null,
+      event_id: event.legacy_sql_id ?? event._id.toString(),
+      event_mongo_id: event._id.toString(),
+      event_title: registration.event_id?.title || event.title,
+    }));
+
+    return successResponse(res, 200, 'Lấy danh sách đăng ký thành công', data);
+  } catch (error) {
+    next(error);
   }
 };
 
 const getOrganizerEvents = async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 10;
-
-    const safePage = Number.isInteger(page) && page > 0 ? page : 1;
-    const safeLimit = Number.isInteger(limit) && limit > 0 ? limit : 10;
-    const offset = (safePage - 1) * safeLimit;
-
-    let events;
-    let total = 0;
-    if (req.user.role === 'admin') {
-      // Admins can see all events
-      events = await getAllEvents(offset, safeLimit);
-      total = await countAllEvents();
-    } else {
-      // Organizers see only their own events
-      events = await getEventsByOrganizer(req.user.id, offset, safeLimit);
-      total = await countEventsByOrganizer(req.user.id);
+    const page = Math.max(parseInt(req.query.page || '1', 10), 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit || '10', 10), 1), 50); // Giới hạn tối đa 50 item để đảm bảo tốc độ
+    const search = String(req.query.search || '').trim();
+    
+    const filter = req.user.role === 'admin' ? { is_active: true } : { created_by: req.user.id, is_active: true };
+    if (search) {
+      filter.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { location: { $regex: search, $options: 'i' } }
+      ];
     }
 
-    const totalPages = Math.ceil(total / safeLimit);
+    const { data, total } = await listEventsWithCounts(
+      req,
+      filter,
+      { createdAt: -1 },
+      page,
+      limit
+    );
 
-    return paginatedSuccessResponse(res, 200, 'Events retrieved successfully', events, {
-      page: safePage,
-      limit: safeLimit,
+    return paginatedSuccessResponse(res, 200, 'Lấy danh sách sự kiện của nhà tổ chức thành công', data, {
+      page,
+      limit,
       total,
-      totalPages
+      totalPages: Math.ceil(total / limit),
     });
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    next(error);
   }
 };
 
-const getEventParticipants = async (req, res, next) => {
+const updateEvent = async (req, res, next) => {
   try {
-    const eventId = req.params.id;
-
-    // Check if user is the organizer of this event or admin
-    const event = await getEventById(eventId);
+    const event = await Event.findOne(buildLegacyOrObjectIdQuery(req.params.id));
     if (!event) {
-      return errorResponse(res, 404, 'Event not found');
+      return errorResponse(res, 404, 'Không tìm thấy sự kiện');
     }
 
-    if (req.user.role !== 'admin' && event.created_by !== req.user.id) {
-      return errorResponse(res, 403, 'Access denied: You can only view participants of your own events');
+    if (req.user.role !== 'admin' && event.created_by.toString() !== req.user.id) {
+      return errorResponse(res, 403, 'Bạn không có quyền truy cập sự kiện này');
     }
 
-    const participants = await getEventParticipantsModel(eventId);
-    return successResponse(res, 200, 'Event participants retrieved successfully', participants);
-  } catch (err) {
-    next(err);
+    [
+      'title',
+      'description',
+      'location',
+      'start_time',
+      'end_time',
+      'max_participants',
+      'is_active',
+      'category_id',
+    ].forEach((field) => {
+      if (req.body[field] !== undefined) {
+        event[field] = req.body[field];
+      }
+    });
+
+    if (req.body.images !== undefined) {
+      event.images = Array.isArray(req.body.images) ? req.body.images : [];
+    }
+
+    await event.save();
+
+    const populatedEvent = await Event.findById(event._id).populate(eventPopulate).lean();
+    const countMaps = await buildCountMaps([event._id]);
+    return successResponse(
+      res,
+      200,
+      'Cập nhật sự kiện thành công',
+      serializeEvent(populatedEvent, req, countMaps)
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteEvent = async (req, res, next) => {
+  try {
+    const event = await Event.findOne(buildLegacyOrObjectIdQuery(req.params.id));
+    if (!event) {
+      return errorResponse(res, 404, 'Không tìm thấy sự kiện');
+    }
+
+    if (req.user.role !== 'admin' && event.created_by.toString() !== req.user.id) {
+      return errorResponse(res, 403, 'Bạn không có quyền truy cập sự kiện này');
+    }
+
+    event.is_active = false;
+    await event.save();
+
+    return successResponse(res, 200, 'Xóa sự kiện thành công', {
+      id: getPublicId(event, req),
+      mongo_id: event._id.toString(),
+    });
+  } catch (error) {
+    next(error);
   }
 };
 
 module.exports = {
-  getEvents,
-  getEventById: getEventByIdHandler,
-  createEvent: createEventHandler,
-  updateEvent: updateEventHandler,
-  deleteEvent,
-  registerForEvent,
   cancelRegistration,
-  getUserEvents,
+  createEvent,
+  deleteEvent,
+  getEventById,
+  getEvents,
   getEventRegistrations,
   getOrganizerEvents,
-  getEventParticipants
+  registerForEvent,
+  updateEvent,
 };

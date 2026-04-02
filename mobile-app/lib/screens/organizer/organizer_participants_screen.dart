@@ -4,6 +4,8 @@ import '../../services/organizer_service.dart';
 import '../../models/event.dart';
 import '../../models/participant.dart';
 import '../../utils/string_utils.dart';
+import '../../config/api_config.dart';
+import '../../utils/image_helper.dart';
 
 class OrganizerParticipantsScreen extends StatefulWidget {
   const OrganizerParticipantsScreen({super.key});
@@ -183,7 +185,12 @@ class _ParticipantTile extends StatelessWidget {
           CircleAvatar(
             radius: 22,
             backgroundColor: checkedIn ? Colors.green.withOpacity(0.15) : Colors.orange.withOpacity(0.15),
-            child: Text(participant.fullName.isNotEmpty ? participant.fullName[0].toUpperCase() : '?', style: TextStyle(fontWeight: FontWeight.bold, color: checkedIn ? Colors.green : Colors.orange)),
+            backgroundImage: ImageHelper.getAvatarProvider(
+               participant.avatar != null ? ApiConfig.resolveMediaUrl(participant.avatar!) : null
+            ),
+            child: (participant.avatar == null || participant.avatar!.isEmpty)
+              ? Text(participant.fullName.isNotEmpty ? participant.fullName[0].toUpperCase() : '?', style: TextStyle(fontWeight: FontWeight.bold, color: checkedIn ? Colors.green : Colors.orange))
+              : null,
           ),
           const SizedBox(width: 12),
           Expanded(

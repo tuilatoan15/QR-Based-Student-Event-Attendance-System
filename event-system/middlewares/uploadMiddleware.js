@@ -1,25 +1,24 @@
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const multer = require('multer');
-const path = require('path');
 
-// Use memory storage for Cloudinary upload
-const storage = multer.memoryStorage();
-
-const fileFilter = (req, file, cb) => {
-  // Flutter's http.MultipartRequest can sometimes default to 'application/octet-stream'
-  // Or if it's explicitly an image
-  if (file.mimetype.startsWith('image/') || file.mimetype === 'application/octet-stream') {
-    cb(null, true);
-  } else {
-    cb(new Error('Only images are allowed!'), false);
-  }
-};
-
-const upload = multer({
-  storage: storage,
-  fileFilter: fileFilter,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
-  }
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
+
+// Configure Storage
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'avatars',
+    allowed_formats: ['jpg', 'png', 'jpeg'],
+    transformation: [{ width: 500, height: 500, crop: 'limit' }],
+  },
+});
+
+const upload = multer({ storage: storage });
 
 module.exports = upload;

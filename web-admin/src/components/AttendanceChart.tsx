@@ -4,7 +4,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Legend,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -37,8 +36,9 @@ const CustomBarTooltip = ({ active, payload, label }: any) => {
         boxShadow: '0 4px 16px rgba(14,165,233,0.12)',
         fontSize: 13,
       }}>
-        <div style={{ fontWeight: 600, color: '#0f172a', marginBottom: 4 }}>{label}</div>
-        <div style={{ color: '#0284c7' }}>Tỉ lệ: <strong>{payload[0].value}%</strong></div>
+        <div style={{ fontWeight: 600, color: '#0f172a', marginBottom: 6 }}>{label}</div>
+        <div style={{ color: '#0284c7', marginBottom: 3 }}>Tỉ lệ: <strong>{payload[0].value}%</strong></div>
+        <div style={{ color: '#64748b', fontSize: 12 }}>Điểm danh: <strong>{(payload[0].payload as AttendanceRatePoint).attended}</strong> / Đăng ký: <strong>{(payload[0].payload as AttendanceRatePoint).registered}</strong></div>
       </div>
     );
   }
@@ -51,8 +51,8 @@ const AttendanceChart: React.FC<AttendanceChartProps> = ({
   attendedTotal,
 }) => {
   const pieData = [
-    { name: 'Đã check-in', value: attendedTotal },
-    { name: 'Chưa check-in', value: Math.max(0, registeredTotal - attendedTotal) },
+    { name: 'Đã điểm danh', value: attendedTotal },
+    { name: 'Chưa điểm danh', value: Math.max(0, registeredTotal - attendedTotal) },
   ];
 
   const checkinPct = registeredTotal > 0
@@ -142,7 +142,7 @@ const AttendanceChart: React.FC<AttendanceChartProps> = ({
         {/* Bar Chart */}
         <div className="ac-card">
           <div className="ac-card-title">Tỉ lệ điểm danh theo sự kiện</div>
-          <div className="ac-card-sub">% sinh viên đã check-in / đã đăng ký</div>
+          <div className="ac-card-sub">% sinh viên đã điểm danh / đã đăng ký</div>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={attendanceRateData} barSize={22}
               margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
@@ -175,7 +175,7 @@ const AttendanceChart: React.FC<AttendanceChartProps> = ({
 
         {/* Pie Chart */}
         <div className="ac-card">
-          <div className="ac-card-title">Check-in vs Đã đăng ký</div>
+          <div className="ac-card-title">Điểm danh vs Đã đăng ký</div>
           <div className="ac-card-sub">Tổng quan tình trạng điểm danh</div>
           <div className="ac-pie-wrap">
             <ResponsiveContainer width="100%" height={260}>
@@ -207,19 +207,19 @@ const AttendanceChart: React.FC<AttendanceChartProps> = ({
             </ResponsiveContainer>
             <div className="ac-pie-center">
               <div className="ac-pie-pct">{checkinPct}%</div>
-              <div className="ac-pie-label">check-in</div>
+              <div className="ac-pie-label">điểm danh</div>
             </div>
           </div>
           <div className="ac-stat-row">
             <div className="ac-stat-item">
               <div className="ac-stat-dot" style={{ background: '#0284c7' }} />
               <span className="ac-stat-num">{attendedTotal}</span>
-              <span className="ac-stat-lbl">Đã check-in</span>
+              <span className="ac-stat-lbl">Đã điểm danh</span>
             </div>
             <div className="ac-stat-item">
               <div className="ac-stat-dot" style={{ background: '#bae6fd' }} />
               <span className="ac-stat-num">{Math.max(0, registeredTotal - attendedTotal)}</span>
-              <span className="ac-stat-lbl">Chưa check-in</span>
+              <span className="ac-stat-lbl">Chưa điểm danh</span>
             </div>
             <div className="ac-stat-item">
               <span className="ac-stat-lbl">Tổng:</span>

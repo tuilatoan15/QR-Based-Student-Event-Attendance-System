@@ -115,6 +115,7 @@ class _EventListBody extends StatefulWidget {
 
 enum _EventListFilter {
   all,
+  ongoing,
   upcoming,
 }
 
@@ -145,6 +146,9 @@ class _EventListBodyState extends State<_EventListBody> {
     }).toList();
 
     final allCount = searchedEvents.length;
+    final ongoingCount = searchedEvents
+        .where((event) => event.startTime.isBefore(now) && event.endTime.isAfter(now))
+        .length;
     final upcomingCount =
         searchedEvents.where((event) => event.startTime.isAfter(now)).length;
 
@@ -152,6 +156,8 @@ class _EventListBodyState extends State<_EventListBody> {
       switch (_activeFilter) {
         case _EventListFilter.all:
           return true;
+        case _EventListFilter.ongoing:
+          return event.startTime.isBefore(now) && event.endTime.isAfter(now);
         case _EventListFilter.upcoming:
           return event.startTime.isAfter(now);
       }
@@ -209,11 +215,7 @@ class _EventListBodyState extends State<_EventListBody> {
                               ],
                             ),
                           ),
-                          _HeaderIconBtn(
-                            icon: Icons.qr_code_scanner_rounded,
-                            onTap: () {},
-                            tooltip: 'Quét mã QR',
-                          ),
+
                         ],
                       ),
                     ),
@@ -297,6 +299,17 @@ class _EventListBodyState extends State<_EventListBody> {
                     },
                   ),
                   _StatPill(
+                    label: '$ongoingCount đang diễn ra',
+                    icon: Icons.play_circle_outline_rounded,
+                    color: const Color(0xFF10B981),
+                    isActive: _activeFilter == _EventListFilter.ongoing,
+                    onTap: () {
+                      setState(
+                        () => _activeFilter = _EventListFilter.ongoing,
+                      );
+                    },
+                  ),
+                  _StatPill(
                     label: '$upcomingCount sắp tới',
                     icon: Icons.upcoming_rounded,
                     color: const Color(0xFF0EA5E9),
@@ -335,9 +348,11 @@ class _EventListBodyState extends State<_EventListBody> {
                 title: 'Không tìm thấy sự kiện',
                 subtitle: _query.isNotEmpty
                     ? 'Thử tìm kiếm với từ khóa khác'
-                    : _activeFilter == _EventListFilter.upcoming
-                        ? 'Không có sự kiện sắp tới'
-                        : 'Chưa có sự kiện nào',
+                    : _activeFilter == _EventListFilter.ongoing
+                        ? 'Không có sự kiện nào đang diễn ra'
+                        : _activeFilter == _EventListFilter.upcoming
+                            ? 'Không có sự kiện sắp tới'
+                            : 'Chưa có sự kiện nào',
               ),
             )
           else

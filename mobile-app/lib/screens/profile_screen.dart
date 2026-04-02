@@ -6,6 +6,7 @@ import '../services/event_service.dart';
 import '../services/notification_service.dart';
 import '../services/organizer_service.dart';
 import '../config/api_config.dart';
+import '../utils/image_helper.dart';
 import 'help_center_screen.dart';
 import 'settings_screen.dart';
 
@@ -89,18 +90,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Stack(
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(4),
+                            padding: const EdgeInsets.all(5),
                             decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
                             child: CircleAvatar(
-                              radius: 50,
+                              radius: 60,
                               backgroundColor: const Color(0xFFF1F5F9),
-                              backgroundImage: user.avatar != null 
-                                ? NetworkImage(
-                                    ApiConfig.resolveMediaUrl(user.avatar!)
-                                  )
-                                : null,
-                              child: user.avatar == null 
-                                ? const Icon(Icons.person_rounded, size: 55, color: accent) 
+                              backgroundImage: ImageHelper.getAvatarProvider(
+                                user.avatar != null ? ApiConfig.resolveMediaUrl(user.avatar!) : null
+                              ),
+                              child: (user.avatar == null || user.avatar!.isEmpty)
+                                ? const Icon(Icons.person_rounded, size: 65, color: accent)
                                 : null,
                             ),
                           ),
