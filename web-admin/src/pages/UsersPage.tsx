@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { usersApi, type AdminUser } from '../api/usersApi';
 import { notifySuccess } from '../utils/notify';
-import { Search, Shield, UserCog } from 'lucide-react';
+import { Search, Shield } from 'lucide-react';
 
 const ROLES = ['admin', 'organizer', 'student'] as const;
 
@@ -17,7 +17,7 @@ const UsersPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState<number | null>(null);
-  const [busyUserId, setBusyUserId] = useState<number | null>(null);
+  const [busyUserId, setBusyUserId] = useState<string | null>(null);
 
   const load = async (nextPage = page) => {
     setLoading(true);
@@ -35,12 +35,12 @@ const UsersPage: React.FC = () => {
   const totalPages = useMemo(() => total == null ? null : Math.max(1, Math.ceil(total / 20)), [total]);
 
   const onApplySearch = async () => { setPage(1); await load(1); };
-  const onChangeRole = async (userId: number, role: string) => {
+  const onChangeRole = async (userId: string, role: string) => {
     setBusyUserId(userId);
     try { const res = await usersApi.updateRole(userId, role); notifySuccess(res.data?.message || 'Đã cập nhật vai trò'); await load(page); }
     finally { setBusyUserId(null); }
   };
-  const onToggleActive = async (userId: number, isActive: boolean) => {
+  const onToggleActive = async (userId: string, isActive: boolean) => {
     setBusyUserId(userId);
     try { const res = await usersApi.setActive(userId, isActive); notifySuccess(res.data?.message || 'Đã cập nhật trạng thái'); await load(page); }
     finally { setBusyUserId(null); }
@@ -149,7 +149,6 @@ const UsersPage: React.FC = () => {
               <tbody>
                 {users.map(u => {
                   const busy = busyUserId === u.id;
-                  const roleStyle = ROLE_STYLES[u.role_name] ?? ROLE_STYLES.student;
                   return (
                     <tr key={u.id}>
                       <td>

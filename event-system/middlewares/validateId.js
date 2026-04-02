@@ -1,16 +1,15 @@
+const { mongoose } = require('../config/db');
 const { errorResponse } = require('../utils/response');
+const { isLegacyNumericId } = require('../utils/legacyId');
 
 const validateId = (paramName = 'id') => (req, res, next) => {
-  const raw = req.params[paramName];
-  const id = parseInt(raw, 10);
+  const value = req.params[paramName];
 
-  if (!Number.isInteger(id) || id <= 0) {
-    return errorResponse(res, 400, `Invalid ${paramName}`);
+  if (!mongoose.isValidObjectId(value) && !isLegacyNumericId(value)) {
+    return errorResponse(res, 400, `ID ${paramName} không hợp lệ`);
   }
 
-  req.params[paramName] = id;
   return next();
 };
 
 module.exports = validateId;
-

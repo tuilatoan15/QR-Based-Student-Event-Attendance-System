@@ -102,7 +102,7 @@ class _OrganizerScanScreenState extends State<OrganizerScanScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFF),
       appBar: AppBar(
-        title: const Text('Scan QR Check-in', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, letterSpacing: -0.3)),
+        title: const Text('Quét QR Điểm danh', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, letterSpacing: -0.3)),
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF0F172A),
         elevation: 0,

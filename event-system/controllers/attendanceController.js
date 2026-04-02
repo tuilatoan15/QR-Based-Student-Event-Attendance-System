@@ -1,338 +1,423 @@
-const { sql, poolPromise } = require('../config/db');
-const {
-  findRegistrationByQrToken,
-  hasAttendanceForRegistration,
-  REGISTRATION_STATUS
-} = require('../models/registrationModel');
-const { getEventById } = require('../models/eventModel');
-const { getAttendancesForEvent } = require('../models/registrationModel');
+const { mongoose } = require('../config/db');
+const Event = require('../models/eventModel');
+const User = require('../models/userModel');
+const { Registration, REGISTRATION_STATUS } = require('../models/registrationModel');
+const Attendance = require('../models/attendanceModel');
 const { successResponse, errorResponse } = require('../utils/response');
 const { logCheckin } = require('../utils/logger');
-const googleSheetService = require('../services/googleSheetService');
 const qrService = require('../services/qrService');
+const notificationService = require('../services/notificationService');
+const { buildLegacyOrObjectIdQuery, isLegacyNumericId } = require('../utils/legacyId');
+const { nextLegacySqlId } = require('../utils/legacySequence');
+const { getPublicId } = require('../utils/clientFormat');
 
-const scanQr = async (req, res, next) => {
-  const pool = await poolPromise;
-  const transaction = new sql.Transaction(pool);
+const serializeAttendance = (attendance, req) => ({
+  id: getPublicId(attendance, req),
+  mongo_id: attendance._id.toString(),
+  attendance_id: getPublicId(attendance, req),
+  registration_id:
+    attendance.registration_id?.legacy_sql_id ??
+    attendance.registration_id?._id?.toString() ??
+    null,
+  check_in_time: attendance.checkin_time,
+  checkin_time: attendance.checkin_time,
+  attendance_status: 'attended',
+  registration_status: attendance.registration_id?.status || 'attended',
+  event_id:
+    attendance.event_id?.legacy_sql_id ?? attendance.event_id?._id?.toString() ?? null,
+  event_title: attendance.event_id?.title || null,
+  user_id:
+    attendance.student_id?.legacy_sql_id ?? attendance.student_id?._id?.toString() ?? null,
+  student_name: attendance.student_id?.full_name || null,
+  full_name: attendance.student_id?.full_name || null,
+  email: attendance.student_id?.email || null,
+  student_code: attendance.student_id?.student_code || null,
+  avatar: attendance.student_id?.avatar || null,
+  registered_at: attendance.registration_id?.registered_at || null,
+});
 
+const checkInAttendance = async (req, res, next) => {
   try {
-    const { qr_token: bodyQrToken, qr_code } = req.body;
-    let qr_token = bodyQrToken || qr_code;
-
-    if (!qr_token || typeof qr_token !== 'string' || !qr_token.trim()) {
-      return errorResponse(res, 400, 'qr_token is required');
+    const rawToken = req.body.qr_token || req.body.qr_code;
+    if (!rawToken || typeof rawToken !== 'string') {
+      return errorResponse(res, 400, 'Yêu cầu cung cấp mã QR');
     }
 
-    qr_token = qr_token.trim();
-
-    // Extract QR token if it's a full QR code data
-    const extractedToken = qrService.extractQrToken(qr_token);
-    if (extractedToken) {
-      qr_token = extractedToken;
+    const qr_token = qrService.extractQrToken(rawToken.trim());
+    if (!qr_token) {
+      return errorResponse(res, 400, 'Định dạng mã QR không hợp lệ');
     }
 
-    // Find registration by QR token
-    const registration = await findRegistrationByQrToken(qr_token);
+    const registration = await Registration.findOne({ qr_token })
+      .populate('user_id', 'full_name email student_code avatar role legacy_sql_id')
+      .populate({
+        path: 'event_id',
+        populate: {
+          path: 'created_by',
+          select: 'full_name email role legacy_sql_id',
+        },
+      });
 
     if (!registration) {
-      return errorResponse(res, 404, 'Invalid QR code');
+      return errorResponse(res, 404, 'Không tìm thấy thông tin đăng ký cho mã QR này');
+    }
+
+    if (!registration.event_id) {
+      return errorResponse(res, 404, 'Không tìm thấy sự kiện');
+    }
+
+    const eventOwnerId = registration.event_id.created_by?._id?.toString();
+    if (req.user.role !== 'admin' && eventOwnerId !== req.user.id) {
+      return errorResponse(res, 403, 'Bạn không có quyền điểm danh cho người này');
     }
 
     if (registration.status === REGISTRATION_STATUS.CANCELLED) {
-      return errorResponse(res, 400, 'Sinh viên này đã huỷ đăng ký sự kiện');
+      return errorResponse(res, 400, 'Đăng ký này đã bị hủy');
     }
 
-    // NEW: Check if the organizer has permission for this event
-    const eventDetails = await getEventById(registration.event_id);
-    if (!eventDetails) {
-      return errorResponse(res, 404, 'Event associated with this QR not found');
-    }
+    const existingAttendance = await Attendance.findOne({
+      registration_id: registration._id,
+    })
+      .populate('student_id', 'full_name email student_code legacy_sql_id')
+      .populate('event_id', 'title legacy_sql_id')
+      .populate({ path: 'registration_id', select: 'status registered_at legacy_sql_id' });
 
-    if (req.user.role !== 'admin' && eventDetails.created_by !== req.user.id) {
-      return errorResponse(res, 403, 'Bạn không có quyền điểm danh cho sự kiện này');
-    }
-
-    // Check if already attended
-    const existingAttendance = await pool.request()
-      .input('reg_id', sql.Int, registration.id)
-      .query('SELECT checkin_time AS check_in_time FROM attendances WHERE registration_id = @reg_id');
-
-    if (registration.status === REGISTRATION_STATUS.ATTENDED || existingAttendance.recordset.length > 0) {
-      const checkinTime = existingAttendance.recordset[0]?.check_in_time || registration.updated_at; // Fallback to updated_at if somehow missing
-      return successResponse(res, 200, 'Sinh viên này đã điểm danh trước đó', {
+    if (existingAttendance || registration.status === REGISTRATION_STATUS.ATTENDED) {
+      return successResponse(res, 200, 'Sinh viên này đã được điểm danh trước đó', {
         already_checked_in: true,
-        student_name: registration.full_name,
-        student_code: registration.student_code,
-        event_title: registration.event_title,
-        check_in_time: checkinTime
+        registration_id: getPublicId(registration, req),
+        student_name: registration.user_id?.full_name || null,
+        student_code: registration.user_id?.student_code || null,
+        event_title: registration.event_id.title,
+        checkin_time: existingAttendance?.checkin_time || registration.updatedAt,
+        check_in_time: existingAttendance?.checkin_time || registration.updatedAt,
       });
     }
 
-    // Get event details for Google Sheets update
-    const event = await pool.request()
-      .input('event_id', sql.Int, registration.event_id)
-      .query('SELECT google_sheet_name FROM events WHERE id = @event_id');
+    const attendance = await Attendance.create({
+      legacy_sql_id: await nextLegacySqlId(req.app.locals.db, 'attendances'),
+      registration_id: registration._id,
+      event_id: registration.event_id._id,
+      student_id: registration.user_id._id,
+      checked_in_by: req.user.id,
+    });
 
-    const sheetName = event.recordset[0]?.google_sheet_name;
+    registration.status = REGISTRATION_STATUS.ATTENDED;
+    await registration.save();
 
-    // Use transaction for atomicity
-    await transaction.begin();
+    // Send notification
+    await notificationService.sendNotification(
+      req.app.locals.db,
+      registration.user_id._id,
+      'Điểm danh thành công',
+      `Bạn đã được điểm danh tham gia sự kiện: ${registration.event_id.title}`,
+      'checkin',
+      registration.event_id._id
+    );
 
-    try {
-      const request = new sql.Request(transaction);
+    logCheckin(registration._id.toString(), req.user.id);
 
-      // Insert attendance record
-      const attendanceResult = await request
-        .input('registration_id', sql.Int, registration.id)
-        .input('checkin_by', sql.Int, req.user.id)
-        .query(
-          `INSERT INTO attendances (registration_id, checkin_time, checkin_by)
-           OUTPUT INSERTED.checkin_time AS check_in_time
-           VALUES (@registration_id, SYSUTCDATETIME(), @checkin_by)`
-        );
+    const populatedAttendance = await Attendance.findById(attendance._id)
+      .populate('student_id', 'full_name email student_code avatar legacy_sql_id')
+      .populate('checked_in_by', 'full_name email role legacy_sql_id')
+      .populate('event_id', 'title legacy_sql_id')
+      .populate({ path: 'registration_id', select: 'status registered_at legacy_sql_id' });
 
-      const check_in_time = attendanceResult.recordset[0].check_in_time;
-
-      // Update registration status to attended
-      await request
-        .input('id', sql.Int, registration.id)
-        .input('status', sql.NVarChar(20), REGISTRATION_STATUS.ATTENDED)
-        .query('UPDATE registrations SET status = @status WHERE id = @id');
-
-      // Create notification for student
-      await request
-        .input('student_id', sql.Int, registration.user_id)
-        .input('notif_title', sql.NVarChar(255), 'Điểm danh thành công')
-        .input('notif_msg', sql.NVarChar(sql.MAX), 'Bạn đã điểm danh thành công sự kiện: ' + registration.event_title)
-        .input('notif_type', sql.NVarChar(50), 'checkin')
-        .input('event_id', sql.Int, registration.event_id)
-        .query(`INSERT INTO notifications (user_id, title, message, [type], event_id) VALUES (@student_id, @notif_title, @notif_msg, @notif_type, @event_id)`);
-
-      // Commit transaction if all operations succeed
-      await transaction.commit();
-
-      // Update Google Sheet (non-critical, don't fail check-in if this fails)
-      try {
-        if (sheetName) {
-          await googleSheetService.updateAttendanceStatus(sheetName, qr_token, checkin_time);
-        }
-      } catch (sheetError) {
-        console.error('Error updating Google Sheet:', sheetError);
-      }
-
-      logCheckin(registration.id, req.user.id);
-      
-      return successResponse(res, 200, 'Điểm danh thành công!', {
-        registration_id: registration.id,
-        student_name: registration.full_name,
-        event_id: registration.event_id,
-        event_title: registration.event_title,
-        check_in_time: check_in_time
-      });
-    } catch (transactionError) {
-      await transaction.rollback();
-      // Handle Unique Key constraint violation (SQL Server error code 2627)
-      if (transactionError.number === 2627 || transactionError.code === 'EREQUEST' && transactionError.message.includes('UNIQUE KEY')) {
-        return successResponse(res, 200, 'Sinh viên này đã điểm danh trước đó', {
-          already_checked_in: true,
-          student_name: registration.full_name,
-          event_title: registration.event_title
-        });
-      }
-      throw transactionError;
+    return successResponse(res, 200, 'Điểm danh thành công', {
+      attendance: serializeAttendance(populatedAttendance, req),
+      student_name: populatedAttendance.student_id?.full_name || null,
+      check_in_time: populatedAttendance.checkin_time,
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return errorResponse(res, 409, 'Bản ghi điểm danh đã tồn tại');
     }
-  } catch (err) {
-    next(err);
+    next(error);
   }
 };
 
 const getEventAttendance = async (req, res, next) => {
   try {
-    const eventId = req.params.id;
-    const event = await getEventById(eventId);
+    const event = await Event.findOne(buildLegacyOrObjectIdQuery(req.params.id));
     if (!event) {
-      return errorResponse(res, 404, 'Event not found');
+      return errorResponse(res, 404, 'Không tìm thấy sự kiện');
     }
 
-    // Check ownership
-    if (req.user.role !== 'admin' && event.created_by !== req.user.id) {
-      return errorResponse(res, 403, 'Permission denied: This event does not belong to you');
+    if (req.user.role !== 'admin' && event.created_by.toString() !== req.user.id) {
+      return errorResponse(res, 403, 'Bạn không có quyền truy cập sự kiện này');
     }
 
-    const list = await getAttendancesForEvent(eventId);
-    return successResponse(res, 200, 'Attendances retrieved successfully', list);
-  } catch (err) {
-    next(err);
+    const attendances = await Attendance.find({ event_id: event._id })
+      .populate('student_id', 'full_name email student_code avatar legacy_sql_id')
+      .populate('checked_in_by', 'full_name email role legacy_sql_id')
+      .populate('event_id', 'title legacy_sql_id')
+      .populate({
+        path: 'registration_id',
+        select: 'qr_token status registered_at legacy_sql_id',
+      })
+      .lean();
+
+    const data = attendances.map((attendance) => serializeAttendance(attendance, req));
+    return successResponse(res, 200, 'Lấy danh sách điểm danh thành công', data);
+  } catch (error) {
+    next(error);
   }
 };
 
 const getEventAttendanceStats = async (req, res, next) => {
   try {
-    const eventId = parseInt(req.params.id, 10);
-    if (!eventId || !Number.isInteger(eventId)) {
-      return errorResponse(res, 400, 'Invalid event id');
-    }
-
-    const event = await getEventById(eventId);
+    const event = await Event.findOne(buildLegacyOrObjectIdQuery(req.params.id));
     if (!event) {
-      return errorResponse(res, 404, 'Event not found');
+      return errorResponse(res, 404, 'Không tìm thấy sự kiện');
     }
 
-    // Check ownership
-    if (req.user.role !== 'admin' && event.created_by !== req.user.id) {
-      return errorResponse(res, 403, 'Permission denied: This event does not belong to you');
+    if (req.user.role !== 'admin' && event.created_by.toString() !== req.user.id) {
+      return errorResponse(res, 403, 'Bạn không có quyền truy cập sự kiện này');
     }
 
-    const pool = await poolPromise;
+    const [totalRegistered, totalAttended] = await Promise.all([
+      Registration.countDocuments({
+        event_id: event._id,
+        status: { $ne: REGISTRATION_STATUS.CANCELLED },
+      }),
+      Attendance.countDocuments({ event_id: event._id }),
+    ]);
 
-    const registeredRes = await pool
-      .request()
-      .input('event_id', sql.Int, eventId)
-      .query(
-        `SELECT COUNT(1) AS total_registered
-         FROM registrations
-         WHERE event_id = @event_id AND status <> 'cancelled'`
-      );
-
-    const attendedRes = await pool
-      .request()
-      .input('event_id', sql.Int, eventId)
-      .query(
-        `SELECT COUNT(1) AS total_attended
-         FROM attendances a
-         JOIN registrations r ON a.registration_id = r.id
-         WHERE r.event_id = @event_id`
-      );
-
-    const total_registered = registeredRes.recordset[0]?.total_registered ?? 0;
-    const total_attended = attendedRes.recordset[0]?.total_attended ?? 0;
-    const attendance_rate =
-      total_registered > 0
-        ? Math.round((total_attended / total_registered) * 100)
-        : 0;
-
-    return successResponse(res, 200, 'Attendance stats retrieved successfully', {
-      eventId,
-      total_registered,
-      total_attended,
-      attendance_rate
+    return successResponse(res, 200, 'Lấy thống kê điểm danh thành công', {
+      eventId: event.legacy_sql_id ?? event._id.toString(),
+      total_registered: totalRegistered,
+      total_attended: totalAttended,
+      attendance_rate:
+        totalRegistered > 0 ? Math.round((totalAttended / totalRegistered) * 100) : 0,
     });
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    next(error);
   }
 };
 
-// Manual check-in by student_code + event_id
+const listAttendance = async (req, res, next) => {
+  try {
+    const { event_id, search } = req.query;
+    const filter = {};
+    let resolvedEventId = null;
+
+    if (event_id) {
+      if (isLegacyNumericId(event_id)) {
+        const event = await Event.findOne({ legacy_sql_id: Number(event_id) }).select('_id');
+        resolvedEventId = event?._id || null;
+      } else {
+        resolvedEventId = event_id;
+      }
+      filter.event_id = resolvedEventId;
+    } else if (req.user.role !== 'admin') {
+      const organizerEvents = await Event.find({ created_by: req.user.id }).select('_id');
+      filter.event_id = { $in: organizerEvents.map((item) => item._id) };
+    }
+
+    let records = [];
+    if (event_id) {
+      // If filtering by event, show ALL registrations for that specific event (full roster)
+      const registrations = await Registration.find({
+        ...filter,
+        status: { $ne: REGISTRATION_STATUS.CANCELLED },
+      })
+        .populate('user_id', 'full_name email student_code legacy_sql_id')
+        .populate('event_id', 'title legacy_sql_id')
+        .sort({ registered_at: -1 })
+        .lean();
+
+      // Also get attendance records to find check-in times
+      const attendances = await Attendance.find({ event_id: resolvedEventId }).select('registration_id checkin_time').lean();
+      const attendanceMap = new Map(attendances.map(a => [a.registration_id.toString(), a.checkin_time]));
+
+      records = registrations.map(reg => ({
+        id: getPublicId(reg, req),
+        mongo_id: reg._id.toString(),
+        registration_id: getPublicId(reg, req),
+        registration_status: reg.status,
+        attendance_status: reg.status === REGISTRATION_STATUS.ATTENDED ? 'attended' : 'registered',
+        event_id: getPublicId(reg.event_id, req),
+        event_title: reg.event_id?.title || null,
+        user_id: getPublicId(reg.user_id, req),
+        student_name: reg.user_id?.full_name || null,
+        full_name: reg.user_id?.full_name || null,
+        email: reg.user_id?.email || null,
+        student_code: reg.user_id?.student_code || null,
+        check_in_time: attendanceMap.get(reg._id.toString()) || null,
+        checkin_time: attendanceMap.get(reg._id.toString()) || null,
+        registered_at: reg.registered_at,
+      }));
+    } else {
+      // If no event filter, show chronological check-in history from the Attendance collection
+      const attendances = await Attendance.find(filter)
+        .populate('student_id', 'full_name email student_code legacy_sql_id')
+        .populate('event_id', 'title legacy_sql_id')
+        .populate({
+          path: 'registration_id',
+          select: 'status registered_at legacy_sql_id',
+        })
+        .sort({ checkin_time: -1 })
+        .lean();
+      records = attendances.map(a => serializeAttendance(a, req));
+    }
+
+    const term = (search || '').toString().trim().toLowerCase();
+    const data = records.filter((item) => {
+      if (!term) return true;
+      return [item.student_name, item.email, item.student_code, item.event_title]
+        .filter(Boolean)
+        .some((value) => value.toLowerCase().includes(term));
+    });
+
+    return successResponse(res, 200, 'Lấy danh sách điểm danh thành công', data);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const manualCheckinByStudent = async (req, res, next) => {
-  const pool = await poolPromise;
-  const transaction = new sql.Transaction(pool);
   try {
     const { student_code, event_id } = req.body;
 
     if (!student_code || !event_id) {
-      return errorResponse(res, 400, 'student_code v\u00e0 event_id l\u00e0 b\u1eaft bu\u1ed9c');
+      return errorResponse(res, 400, 'Yêu cầu nhập mã sinh viên và ID sự kiện');
     }
 
-    // Verify organizer permission
-    const event = await getEventById(event_id);
-    if (!event) return errorResponse(res, 404, 'Kh\u00f4ng t\u00ecm th\u1ea5y s\u1ef1 ki\u1ec7n');
-    if (req.user.role !== 'admin' && event.created_by !== req.user.id) {
-      return errorResponse(res, 403, 'B\u1ea1n kh\u00f4ng c\u00f3 quy\u1ec1n \u0111i\u1ec3m danh cho s\u1ef1 ki\u1ec7n n\u00e0y');
+    let resolvedEventId = event_id;
+    if (isLegacyNumericId(event_id)) {
+      const event = await Event.findOne({ legacy_sql_id: Number(event_id) }).select('_id');
+      resolvedEventId = event?._id?.toString();
     }
 
-    // Find registration by student_code + event_id
-    const regRes = await pool.request()
-      .input('student_code', sql.NVarChar(50), student_code.trim().toUpperCase())
-      .input('event_id', sql.Int, parseInt(event_id, 10))
-      .query(`
-        SELECT r.id AS registration_id, r.status, u.full_name, u.student_code, r.user_id, e.title AS event_title
-        FROM registrations r
-        JOIN users u ON r.user_id = u.id
-        JOIN events e ON r.event_id = e.id
-        WHERE UPPER(u.student_code) = @student_code
-          AND r.event_id = @event_id
-      `);
-
-    const reg = regRes.recordset[0];
-    if (!reg) {
-      return errorResponse(res, 404, `Kh\u00f4ng t\u00ecm th\u1ea5y \u0111\u0103ng k\u00fd cho MSSV: ${student_code} t\u1ea1i s\u1ef1 ki\u1ec7n n\u00e0y`);
+    const student = await User.findOne({ student_code: student_code.trim() }).select('_id');
+    if (!student) {
+      return errorResponse(res, 404, 'Không tìm thấy sinh viên');
     }
 
-    if (reg.status === 'cancelled') {
-       return errorResponse(res, 400, 'Sinh viên này đã huỷ đăng ký sự kiện');
+    const registration = await Registration.findOne({
+      event_id: resolvedEventId,
+      user_id: student._id,
+      status: { $ne: REGISTRATION_STATUS.CANCELLED },
+    }).select('qr_token');
+
+    if (!registration) {
+      return errorResponse(res, 404, 'Không tìm thấy thông tin đăng ký');
     }
 
-    if (reg.status === 'attended') {
-      const existingAtt = await pool.request()
-        .input('reg_id', sql.Int, reg.registration_id)
-        .query('SELECT checkin_time AS check_in_time FROM attendances WHERE registration_id = @reg_id');
-      
-      const checkinTime = existingAtt.recordset[0]?.check_in_time;
+    req.body.qr_token = registration.qr_token;
+    return checkInAttendance(req, res, next);
+  } catch (error) {
+    next(error);
+  }
+};
 
-      return successResponse(res, 200, 'Sinh viên này đã điểm danh trước đó', {
-        already_checked_in: true,
-        student_name: reg.full_name,
-        student_code: reg.student_code,
-        event_title: reg.event_title,
-        check_in_time: checkinTime
-      });
+const getBulkEventStats = async (req, res, next) => {
+  try {
+    const { eventIds } = req.query;
+    if (!eventIds) {
+      return errorResponse(res, 400, 'Yêu cầu cung cấp danh sách ID sự kiện');
     }
 
-    await transaction.begin();
-    try {
-      const request = new sql.Request(transaction);
+    const ids = eventIds
+      .split(',')
+      .map((id) => id.trim())
+      .filter((id) => mongoose.isValidObjectId(id) || isLegacyNumericId(id));
 
-      const attResult = await request
-        .input('registration_id', sql.Int, reg.registration_id)
-        .input('checkin_by', sql.Int, req.user.id)
-        .query(`
-          INSERT INTO attendances (registration_id, checkin_time, checkin_by)
-          OUTPUT INSERTED.checkin_time AS check_in_time
-          VALUES (@registration_id, SYSUTCDATETIME(), @checkin_by)
-        `);
+    if (ids.length === 0) {
+      return successResponse(res, 200, 'Không tìm thấy ID sự kiện hợp lệ', []);
+    }
 
-      const check_in_time = attResult.recordset[0].check_in_time;
+    // Convert IDs to ObjectIds if they are valid
+    const objectIds = [];
+    const legacyIds = [];
 
-      await request
-        .input('reg_id', sql.Int, reg.registration_id)
-        .input('status', sql.NVarChar(20), 'attended')
-        .query('UPDATE registrations SET status = @status WHERE id = @reg_id');
-
-      // Notification
-      await request
-        .input('student_id', sql.Int, reg.user_id)
-        .input('notif_title', sql.NVarChar(255), 'Điểm danh thành công')
-        .input('notif_msg', sql.NVarChar(sql.MAX), 'Bạn đã điểm danh thành công sự kiện: ' + reg.event_title)
-        .input('notif_type', sql.NVarChar(50), 'checkin')
-        .input('event_id', sql.Int, reg.event_id || event_id)
-        .query('INSERT INTO notifications (user_id, title, message, [type], event_id) VALUES (@student_id, @notif_title, @notif_msg, @notif_type, @event_id)');
-
-      await transaction.commit();
-
-      return successResponse(res, 200, '\u0110i\u1ec3m danh th\u1ee7 c\u00f4ng th\u00e0nh c\u00f4ng!', {
-        student_name: reg.full_name,
-        student_code: reg.student_code,
-        event_title: reg.event_title,
-        check_in_time: check_in_time
-      });
-    } catch (txErr) {
-      await transaction.rollback();
-      if (txErr.number === 2627) {
-        return successResponse(res, 200, 'Sinh vi\u00ean n\u00e0y \u0111\u00e3 \u0111i\u1ec3m danh tr\u01b0\u1edbc \u0111\u00f3', {
-          already_checked_in: true,
-          student_name: reg.full_name
-        });
+    for (const id of ids) {
+      if (mongoose.isValidObjectId(id)) {
+        objectIds.push(new mongoose.Types.ObjectId(id));
+      } else if (isLegacyNumericId(id)) {
+        legacyIds.push(Number(id));
       }
-      throw txErr;
     }
-  } catch (err) {
-    next(err);
+
+    // Resolve mongo_ids for legacy numeric IDs
+    if (legacyIds.length > 0) {
+      const resolvedEvents = await Event.find({ legacy_sql_id: { $in: legacyIds } }).select('_id');
+      resolvedEvents.forEach((e) => objectIds.push(e._id));
+    }
+
+    // Single query for all registrations (total) grouped by event_id
+    const registrationStats = await Registration.aggregate([
+      {
+        $match: {
+          event_id: { $in: objectIds },
+          status: { $ne: REGISTRATION_STATUS.CANCELLED },
+        },
+      },
+      {
+        $group: {
+          _id: '$event_id',
+          total_registered: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // Single query for all attendances (checked-in) grouped by event_id
+    const attendanceStats = await Attendance.aggregate([
+      {
+        $match: {
+          event_id: { $in: objectIds },
+        },
+      },
+      {
+        $group: {
+          _id: '$event_id',
+          total_attended: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // Map stats back to event IDs
+    const statsMap = {};
+    objectIds.forEach((id) => {
+      statsMap[id.toString()] = {
+        mongo_id: id.toString(),
+        total_registered: 0,
+        total_attended: 0,
+      };
+    });
+
+    registrationStats.forEach((item) => {
+      if (statsMap[item._id.toString()]) {
+        statsMap[item._id.toString()].total_registered = item.total_registered;
+      }
+    });
+
+    attendanceStats.forEach((item) => {
+      if (statsMap[item._id.toString()]) {
+        statsMap[item._id.toString()].total_attended = item.total_attended;
+      }
+    });
+
+    const data = Object.values(statsMap).map((item) => ({
+      ...item,
+      attendance_rate:
+        item.total_registered > 0
+          ? Math.round((item.total_attended / item.total_registered) * 100)
+          : 0,
+    }));
+
+    return successResponse(res, 200, 'Lấy thống kê điểm danh hàng loạt thành công', data);
+  } catch (error) {
+    next(error);
   }
 };
 
 module.exports = {
-  scanQr,
+  checkInAttendance,
+  getBulkEventStats,
   getEventAttendance,
   getEventAttendanceStats,
-  manualCheckinByStudent
+  listAttendance,
+  manualCheckinByStudent,
 };
+

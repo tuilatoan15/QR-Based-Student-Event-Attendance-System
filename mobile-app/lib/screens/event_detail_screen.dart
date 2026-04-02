@@ -9,6 +9,7 @@ import '../models/event.dart';
 import '../models/registration.dart';
 import '../services/event_service.dart';
 import '../services/auth_service.dart';
+import '../services/notification_service.dart';
 import '../widgets/primary_button.dart';
 import 'qr_screen.dart';
 
@@ -27,11 +28,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final id = ModalRoute.of(context)?.settings.arguments as int?;
+    final id = ModalRoute.of(context)?.settings.arguments?.toString();
     if (id != null && _event == null) _loadEvent(id);
   }
 
-  Future<void> _loadEvent(int id) async {
+  Future<void> _loadEvent(String id) async {
     final svc = context.read<EventService>();
     final event = await svc.fetchEventDetail(id);
     await svc.fetchMyEvents();
@@ -46,7 +47,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     if (!mounted) return;
     if (reg != null) {
       setState(() => _registration = reg);
-      _showSnack('Đăng ký thành công! 🎉', isError: false);
+      _showSnack('Đăng ký thành công!', isError: false);
+      // Refresh notifications to show the new alert
+      context.read<NotificationService>().fetchNotifications(showLocalAlerts: true);
     } else if (svc.errorMessage != null) {
       _showSnack(svc.errorMessage!, isError: true);
     }
@@ -120,7 +123,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final svc = context.read<EventService>();
     final ok = await svc.cancelRegistration(id);
     if (!mounted) return;
-    if (ok) { setState(() => _registration = null); _showSnack('Đã huỷ đăng ký', isError: false); }
+    if (ok) { 
+      setState(() => _registration = null); 
+      _showSnack('Đã huỷ đăng ký', isError: false);
+      // Refresh notifications
+      context.read<NotificationService>().fetchNotifications(showLocalAlerts: true);
+    }
     else if (svc.errorMessage != null) _showSnack(svc.errorMessage!, isError: true);
   }
 
@@ -139,8 +147,89 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   Color get _accent {
     if (_event == null) return const Color(0xFF00CCFF);
-    final colors = [const Color(0xFF00CCFF), const Color(0xFF7C3AED), const Color(0xFF0891B2), const Color(0xFF059669), const Color(0xFFEA580C)];
-    return colors[_event!.id % colors.length];
+    final colors = [const Color(0xFF2563EB), const Color(0xFF7C3AED), const Color(0xFF0891B2), const Color(0xFF059669), const Color(0xFFEA580C)];
+    return colors[_event!.id.hashCode % colors.length];
+  }
+
+  Widget _buildGradientBg() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_accent, _accent.withOpacity(0.7), const Color(0xFF0EA5E9)],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderContent() {
+    return Positioned(
+      left: 20,
+      right: 20,
+      bottom: 24,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withOpacity(0.3)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.event_rounded, size: 12, color: Colors.white),
+                const SizedBox(width: 5),
+                Text(
+                  _event!.startTime.isAfter(DateTime.now()) ? 'Sắp tới' : 'Sự kiện',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _event!.title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
+              shadows: [Shadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 2))],
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              const Icon(Icons.location_on_rounded, size: 14, color: Colors.white70),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  _event!.location,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                    shadows: [Shadow(color: Colors.black26, blurRadius: 4)],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -153,7 +242,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           ? Center(child: svc.isLoading ? CircularProgressIndicator(color: _accent) : const Text('Đang tải...'))
           : CustomScrollView(
               slivers: [
-                // Hero sliver app bar
                 SliverAppBar(
                   expandedHeight: 220,
                   pinned: true,
@@ -172,69 +260,42 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     ),
                   ),
                   flexibleSpace: FlexibleSpaceBar(
-                    background: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [_accent, _accent.withOpacity(0.7), const Color(0xFF0EA5E9)],
-                        ),
-                      ),
-                      child: Stack(
-                        children: [
-                          // decorative circles
-                          Positioned(top: -30, right: -30, child: _Circle(size: 120, color: Colors.white.withOpacity(0.06))),
-                          Positioned(bottom: 20, left: -20, child: _Circle(size: 80, color: Colors.white.withOpacity(0.05))),
-                          // content
-                          Positioned(
-                            left: 20, right: 20, bottom: 24,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(color: Colors.white.withOpacity(0.3)),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.event_rounded, size: 12, color: Colors.white),
-                                      const SizedBox(width: 5),
-                                      Text(_event!.startTime.isAfter(DateTime.now()) ? 'Sắp tới' : 'Sự kiện',
-                                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(_event!.title, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.3), maxLines: 2, overflow: TextOverflow.ellipsis),
-                                const SizedBox(height: 6),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.location_on_rounded, size: 14, color: Colors.white70),
-                                    const SizedBox(width: 4),
-                                    Expanded(child: Text(_event!.location, style: const TextStyle(color: Colors.white70, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                                  ],
-                                ),
+                    background: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // Background Image
+                        _event!.images.isNotEmpty
+                            ? Image.network(
+                                ApiConfig.resolveMediaUrl(_event!.images[0]),
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => _buildGradientBg(),
+                              )
+                            : _buildGradientBg(),
+                        // Overlay Gradient for readability
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.black.withOpacity(0.2),
+                                Colors.black.withOpacity(0.6),
                               ],
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                        // Content
+                        _buildHeaderContent(),
+                      ],
                     ),
                   ),
                 ),
-
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.all(20),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Registration status banner
                         if (_registration != null)
                           Container(
                             padding: const EdgeInsets.all(14),
@@ -265,7 +326,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             ),
                           ),
 
-                        // Schedule card
                         _SectionCard(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -280,67 +340,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         ),
                         const SizedBox(height: 12),
 
-                        // Image Gallery
-                        if (_event!.images.isNotEmpty) ...[
-                          _SectionCard(
-                            padding: EdgeInsets.zero,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                                  child: _CardLabel('Banner sự kiện', icon: Icons.photo_library_rounded, color: _accent),
-                                ),
-                                ClipRRect(
-                                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
-                                  child: ListView.separated(
-                                    shrinkWrap: true,
-                                    physics: const NeverScrollableScrollPhysics(),
-                                    itemCount: _event!.images.length,
-                                    separatorBuilder: (_, __) => const SizedBox(height: 1),
-                                    itemBuilder: (ctx, idx) {
-                                      final imageUrl = ApiConfig.resolveMediaUrl(
-                                        _event!.images[idx],
-                                      );
-                                      return Image.network(
-                                        imageUrl,
-                                        width: double.infinity,
-                                        fit: BoxFit.fitWidth,
-                                        errorBuilder: (context, error, stackTrace) {
-                                          return Container(
-                                            padding: const EdgeInsets.all(16),
-                                            color: const Color(0xFFF8FAFC),
-                                            child: const Row(
-                                              children: [
-                                                Icon(
-                                                  Icons.broken_image_outlined,
-                                                  color: Color(0xFF94A3B8),
-                                                ),
-                                                SizedBox(width: 8),
-                                                Expanded(
-                                                  child: Text(
-                                                    'Không thể tải ảnh sự kiện',
-                                                    style: TextStyle(
-                                                      color: Color(0xFF64748B),
-                                                      fontSize: 13,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                        },
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                        ],
 
-                        // Description
                         if (_event!.description != null && _event!.description!.isNotEmpty) ...[
                           _SectionCard(
                             child: Column(
@@ -356,18 +356,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                     return true;
                                   },
                                   textStyle: const TextStyle(fontSize: 14, color: Color(0xFF475569), height: 1.6),
-                                  customStylesBuilder: (element) {
-                                    if (element.localName == 'img') {
-                                      return {
-                                        'width': '100%',
-                                        'height': 'auto',
-                                        'object-fit': 'cover',
-                                        'border-radius': '12px',
-                                        'margin-bottom': '12px',
-                                      };
-                                    }
-                                    return null;
-                                  },
                                 ),
                               ],
                             ),
@@ -375,7 +363,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           const SizedBox(height: 12),
                         ],
 
-                        // Capacity
                         _SectionCard(
                           child: Row(
                             children: [
@@ -397,7 +384,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         ),
                         const SizedBox(height: 24),
 
-                        // Actions
                         if (context.read<AuthService>().currentUser?.role == 'student') ...[
                           if (_registration == null)
                             PrimaryButton(

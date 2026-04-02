@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../services/report_service.dart';
+import 'report_history_screen.dart';
 
 class HelpCenterScreen extends StatefulWidget {
   const HelpCenterScreen({super.key});
@@ -63,6 +66,15 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
             const SizedBox(height: 24),
 
             _SectionTitle('Liên hệ & Báo lỗi (Report bug)', Icons.support_agent_rounded, const Color(0xFFEA580C)),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => Navigator.pushNamed(context, ReportHistoryScreen.routeName),
+                icon: const Icon(Icons.history_rounded, size: 18),
+                label: const Text('Xem lịch sử phản hồi', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                style: TextButton.styleFrom(foregroundColor: const Color(0xFFEA580C)),
+              ),
+            ),
             const _ContactForm(),
             const SizedBox(height: 24),
 
@@ -199,18 +211,32 @@ class _ContactFormState extends State<_ContactForm> {
       return;
     }
     setState(() => _isLoading = true);
-    // Fake delay simulating an API call
-    await Future.delayed(const Duration(seconds: 1));
+    final success = await context.read<ReportService>().submitReport(
+          type: _type,
+          title: _titleCtrl.text.trim(),
+          content: _descCtrl.text.trim(),
+        );
+
     if (!mounted) return;
     setState(() => _isLoading = false);
-    _titleCtrl.clear();
-    _descCtrl.clear();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Đã gửi yêu cầu thành công, chúng tôi sẽ sớm phản hồi!'),
-        backgroundColor: Colors.green,
-      ),
-    );
+
+    if (success) {
+      _titleCtrl.clear();
+      _descCtrl.clear();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Đã gửi yêu cầu thành công, chúng tôi sẽ sớm phản hồi!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Gửi yêu cầu thất bại. Vui lòng thử lại sau.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override

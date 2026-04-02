@@ -11,6 +11,7 @@ import AttendanceChart, {
 import DashboardEventTable, {
   type DashboardEventRow,
 } from '../components/DashboardEventTable';
+import { PageError, PageLoading } from '../components/PageState';
 
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -31,149 +32,113 @@ const DashboardPage: React.FC = () => {
     const load = async () => {
       setLoading(true);
       setError(null);
+
       try {
-        const isOrg = user?.role === 'organizer';
-
-        // Only admins can call listUsers; organizers skip it to avoid 403
-        const [evs, usersRes] = await Promise.all([
-          eventApi.getAllEvents(isOrg),
-          isOrg ? Promise.resolve(null) : usersApi.listUsers({ page: 1, limit: 1 }),
+        const isOrganizer = user?.role === 'organizer';
+        const [allEvents, usersRes] = await Promise.all([
+          eventApi.getAllEvents(isOrganizer),
+          isOrganizer ? Promise.resolve(null) : usersApi.listUsers({ page: 1, limit: 1 }),
         ]);
-        setEvents(evs);
-        const totalUsers = usersRes?.data?.pagination?.total ?? 0;
-        setTotalStudents(totalUsers);
 
-        const sortedLatest = [...evs].sort(
-          (a: any, b: any) =>
-            new Date(b.start_time).getTime() - new Date(a.start_time).getTime(),
+        setEvents(allEvents);
+        setTotalStudents(usersRes?.data?.pagination?.total ?? 0);
+
+        const sortedLatest = [...allEvents].sort(
+          (a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
         );
 
-        type PerEventStats = {
-          ev: Event;
-          registered: number;
-          attended: number;
-          rate: number;
-        };
+        // Use bulk stats API instead of looping individual calls
+        const eventIds = allEvents.map((e) => e.id);
+        const statsRes = await attendanceApi.getBulkEventStats(eventIds);
+        const allStatsArray = statsRes.data?.data || statsRes.data || [];
+        const statsMap = new Map();
+        allStatsArray.forEach((item: any) => {
+          statsMap.set(item.mongo_id || item.eventId, item);
+        });
 
-        // Fetch stats for all events in chunks to avoid overwhelming the server
-        const perEvent: PerEventStats[] = [];
-        for (let i = 0; i < evs.length; i += 10) {
-          const chunk = evs.slice(i, i + 10);
-          const results = await Promise.all(
-            chunk.map(async (ev) => {
-              try {
-                const statsRes = await attendanceApi.getEventAttendanceStats(ev.id);
-                const stats = statsRes.data?.data ?? statsRes.data;
-                const registered = Number(stats?.total_registered ?? 0);
-                const attended = Number(stats?.total_attended ?? 0);
-                const rate = Number(stats?.attendance_rate ?? 0);
-                return { ev, registered, attended, rate };
-              } catch (e) {
-                return { ev, registered: 0, attended: 0, rate: 0 };
-              }
-            }),
+        const perEvent = allEvents.map((event) => {
+          // Thử lookup bằng event.id, hoặc mongo_id nếu có
+          const stats = statsMap.get(event.id) ?? statsMap.get((event as any).mongo_id);
+          // Fallback về registration_count/attendance_count nhúng sẵn trong event nếu bulk stats miss
+          const registered = Number(
+            stats?.total_registered ?? (event as any).registration_count ?? 0
           );
-          perEvent.push(...results);
-        }
+          const attended = Number(
+            stats?.total_attended ?? (event as any).attendance_count ?? 0
+          );
+          // Tính lại rate từ số thô và clamp 0-100 để tránh hiển thị sai
+          const rate =
+            registered > 0 ? Math.min(100, Math.round((attended / registered) * 100)) : 0;
+          return { event, registered, attended, rate };
+        });
 
-        const registrationsSum = perEvent.reduce((acc, x) => acc + x.registered, 0);
-        const attendedSum = perEvent.reduce((acc, x) => acc + x.attended, 0);
-        setTotalRegistrations(registrationsSum);
-        setTotalCheckins(attendedSum);
+        setTotalRegistrations(perEvent.reduce((sum, item) => sum + item.registered, 0));
+        setTotalCheckins(perEvent.reduce((sum, item) => sum + item.attended, 0));
 
-        // For the Attendance Rate chart: Prioritize events that have registrations,
-        // and prefer newest events that have started checking in, or highest registration counts.
-        const chartData = [...perEvent]
-          .filter((x) => x.registered > 0)
+        const chartRows = [...perEvent]
+          .filter((item) => item.registered > 0)
           .sort((a, b) => b.rate - a.rate || b.registered - a.registered)
           .slice(0, 8)
-          .map((x) => ({
-            name: x.ev.title.length > 16 ? `${x.ev.title.slice(0, 16)}…` : x.ev.title,
-            attendance_rate: x.rate,
-            registered: x.registered,
-            attended: x.attended,
+          .map((item) => ({
+            name:
+              item.event.title.length > 16
+                ? `${item.event.title.slice(0, 16)}...`
+                : item.event.title,
+            attendance_rate: item.rate,
+            registered: item.registered,
+            attended: item.attended,
           }));
 
-        // Fallback to top 8 from recently created/sorted if there are none with registrations
         setAttendanceRateData(
-          chartData.length > 0
-            ? chartData
-            : perEvent.slice(0, 8).map((x) => ({
-                name: x.ev.title.length > 16 ? `${x.ev.title.slice(0, 16)}…` : x.ev.title,
-                attendance_rate: x.rate,
-                registered: x.registered,
-                attended: x.attended,
+          chartRows.length > 0
+            ? chartRows
+            : perEvent.slice(0, 8).map((item) => ({
+                name:
+                  item.event.title.length > 16
+                    ? `${item.event.title.slice(0, 16)}...`
+                    : item.event.title,
+                attendance_rate: item.rate,
+                registered: item.registered,
+                attended: item.attended,
               }))
         );
 
-        // For "Sự kiện gần đây" table, just take the 8 most recently starting events
         const latest = sortedLatest.slice(0, 8);
         setLatestRows(
-          latest.map((ev) => {
-            const stats = perEvent.find((p) => p.ev.id === ev.id);
+          latest.map((event) => {
+            const stats = perEvent.find((item) => item.event.id === event.id);
             return {
-              id: ev.id,
-              title: ev.title,
-              location: ev.location,
-              start_time: ev.start_time,
+              id: event.id,
+              title: event.title,
+              location: event.location,
+              start_time: event.start_time,
               registered: stats?.registered || 0,
               checked_in: stats?.attended || 0,
             };
           })
         );
       } catch (err: any) {
-        setError(err?.response?.data?.message || 'Không thể tải dữ liệu dashboard.');
+        setError(err?.response?.data?.message || 'Không thể tải dữ liệu tổng quan.');
       } finally {
         setLoading(false);
       }
     };
+
     void load();
-  }, []);
+  }, [user?.role]);
 
-  const upcomingEvents = events.filter((e: any) => new Date(e.start_time) > now).length;
-
-  if (loading) {
-    return (
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        height: 300, flexDirection: 'column', gap: 16,
-      }}>
-        <div style={{
-          width: 36, height: 36,
-          border: '3px solid #e0eeff',
-          borderTopColor: '#0284c7',
-          borderRadius: '50%',
-          animation: 'spin .7s linear infinite',
-        }} />
-        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-        <span style={{ color: '#94a3b8', fontSize: 13 }}>Đang tải dữ liệu...</span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div style={{
-        background: '#fff1f2', border: '1px solid #fecaca',
-        borderRadius: 12, padding: '16px 20px', color: '#be123c', fontSize: 13,
-      }}>
-        ⚠️ {error}
-      </div>
-    );
-  }
+  const upcomingEvents = events.filter((event) => new Date(event.start_time) > now).length;
 
   return (
     <>
       <style>{`
         .db-root { display: flex; flex-direction: column; gap: 24px; }
-
         .db-header { margin-bottom: 4px; }
         .db-title {
           font-size: 22px; font-weight: 800; color: #0f172a;
           letter-spacing: -0.5px; margin-bottom: 4px;
         }
         .db-subtitle { font-size: 13px; color: #94a3b8; }
-
         .db-stats {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
@@ -181,11 +146,9 @@ const DashboardPage: React.FC = () => {
         }
         @media(max-width:900px){ .db-stats{ grid-template-columns: repeat(2,1fr); } }
         @media(max-width:500px){ .db-stats{ grid-template-columns: 1fr; } }
-
         .db-section-title {
           font-size: 14px; font-weight: 700; color: #0f172a;
-          margin-bottom: 12px;
-          display: flex; align-items: center; gap: 8px;
+          margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
         }
         .db-section-title::after {
           content: ''; flex: 1; height: 1px; background: #e8f2ff;
@@ -193,72 +156,76 @@ const DashboardPage: React.FC = () => {
       `}</style>
 
       <div className="db-root">
-        {/* Header */}
         <div className="db-header">
-          <div className="db-title">Dashboard</div>
+          <div className="db-title">Tổng quan</div>
           <div className="db-subtitle">Tổng quan sự kiện, đăng ký và điểm danh</div>
         </div>
 
-        {/* Stat cards */}
-        <div className="db-stats">
-          <StatCard
-            title="Tổng sự kiện"
-            value={totalEvents}
-            icon={
-              <svg viewBox="0 0 20 20" fill="none" width="20" height="20">
-                <rect x="3" y="4" width="14" height="14" rx="2" stroke="#1d4ed8" strokeWidth="1.6"/>
-                <path d="M13 2v4M7 2v4M3 8h14" stroke="#1d4ed8" strokeWidth="1.6" strokeLinecap="round"/>
-              </svg>
-            }
-            subtext={`${upcomingEvents} sắp diễn ra`}
-            onClick={() => navigate('/events')}
-          />
-          <StatCard
-            title="Sinh viên"
-            value={totalStudents}
-            icon={
-              <svg viewBox="0 0 20 20" fill="none" width="20" height="20">
-                <circle cx="8" cy="6" r="3" stroke="#15803d" strokeWidth="1.6"/>
-                <path d="M2 17v-1a5 5 0 015-5h2a5 5 0 015 5v1" stroke="#15803d" strokeWidth="1.6" strokeLinecap="round"/>
-              </svg>
-            }
-            onClick={() => navigate('/users')}
-          />
-          <StatCard
-            title="Đăng ký"
-            value={totalRegistrations}
-            icon={
-              <svg viewBox="0 0 20 20" fill="none" width="20" height="20">
-                <path d="M6 2h8a2 2 0 012 2v14l-5-3-5 3V4a2 2 0 012-2z" stroke="#c2410c" strokeWidth="1.6" strokeLinejoin="round"/>
-              </svg>
-            }
-            onClick={() => navigate('/events')}
-          />
-          <StatCard
-            title="Check-in"
-            value={totalCheckins}
-            icon={
-              <svg viewBox="0 0 20 20" fill="none" width="20" height="20">
-                <path d="M4 10l4 4 8-8" stroke="#7e22ce" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <circle cx="10" cy="10" r="8" stroke="#7e22ce" strokeWidth="1.6"/>
-              </svg>
-            }
-            onClick={() => navigate('/attendance')}
-          />
-        </div>
+        {error ? (
+          <PageError message={error} />
+        ) : loading ? (
+          <PageLoading message="Đang tải dữ liệu tổng quan..." minHeight={320} />
+        ) : (
+          <>
+            <div className="db-stats">
+              <StatCard
+                title="Tổng sự kiện"
+                value={totalEvents}
+                icon={
+                  <svg viewBox="0 0 20 20" fill="none" width="20" height="20">
+                    <rect x="3" y="4" width="14" height="14" rx="2" stroke="#1d4ed8" strokeWidth="1.6" />
+                    <path d="M13 2v4M7 2v4M3 8h14" stroke="#1d4ed8" strokeWidth="1.6" strokeLinecap="round" />
+                  </svg>
+                }
+                subtext={`${upcomingEvents} sắp diễn ra`}
+                onClick={() => navigate('/events')}
+              />
+              <StatCard
+                title="Sinh viên"
+                value={totalStudents}
+                icon={
+                  <svg viewBox="0 0 20 20" fill="none" width="20" height="20">
+                    <circle cx="8" cy="6" r="3" stroke="#15803d" strokeWidth="1.6" />
+                    <path d="M2 17v-1a5 5 0 015-5h2a5 5 0 015 5v1" stroke="#15803d" strokeWidth="1.6" strokeLinecap="round" />
+                  </svg>
+                }
+                onClick={() => navigate('/users')}
+              />
+              <StatCard
+                title="Đăng ký"
+                value={totalRegistrations}
+                icon={
+                  <svg viewBox="0 0 20 20" fill="none" width="20" height="20">
+                    <path d="M6 2h8a2 2 0 012 2v14l-5-3-5 3V4a2 2 0 012-2z" stroke="#c2410c" strokeWidth="1.6" strokeLinejoin="round" />
+                  </svg>
+                }
+                onClick={() => navigate('/events')}
+              />
+              <StatCard
+                title="Điểm danh"
+                value={totalCheckins}
+                icon={
+                  <svg viewBox="0 0 20 20" fill="none" width="20" height="20">
+                    <path d="M4 10l4 4 8-8" stroke="#7e22ce" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <circle cx="10" cy="10" r="8" stroke="#7e22ce" strokeWidth="1.6" />
+                  </svg>
+                }
+                onClick={() => navigate('/attendance')}
+              />
+            </div>
 
-        {/* Charts */}
-        <AttendanceChart
-          attendanceRateData={attendanceRateData}
-          registeredTotal={totalRegistrations}
-          attendedTotal={totalCheckins}
-        />
+            <AttendanceChart
+              attendanceRateData={attendanceRateData}
+              registeredTotal={totalRegistrations}
+              attendedTotal={totalCheckins}
+            />
 
-        {/* Table */}
-        <div>
-          <div className="db-section-title">Sự kiện gần đây</div>
-          <DashboardEventTable rows={latestRows} />
-        </div>
+            <div>
+              <div className="db-section-title">Sự kiện gần đây</div>
+              <DashboardEventTable rows={latestRows} />
+            </div>
+          </>
+        )}
       </div>
     </>
   );

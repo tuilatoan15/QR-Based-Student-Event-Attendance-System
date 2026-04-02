@@ -76,8 +76,8 @@ const OrganizerApprovalPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [organizers, setOrganizers] = useState<OrganizerInfo[]>([]);
   const [loading, setLoading] = useState(false);
-  const [processingId, setProcessingId] = useState<number | null>(null);
-  const [hoveredRowId, setHoveredRowId] = useState<number | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
 
   // Modal state
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
@@ -101,7 +101,7 @@ const OrganizerApprovalPage: React.FC = () => {
     fetchOrganizers(activeTab);
   }, [activeTab]);
 
-  const handleApprove = async (id: number) => {
+  const handleApprove = async (id: string) => {
     if (!window.confirm('Bạn có chắc muốn phê duyệt tài khoản này?')) return;
     setProcessingId(id);
     try {

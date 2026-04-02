@@ -15,7 +15,7 @@ const AttendanceHistoryPage: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const res = await attendanceApi.getEventAttendance(Number(id));
+        const res = await attendanceApi.getEventAttendance(id);
         const data = res.data.data ?? res.data;
         setRecords(Array.isArray(data) ? data : []);
       } catch (err: any) {

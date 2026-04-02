@@ -1,203 +1,83 @@
-const { sql, poolPromise } = require('../config/db');
+const { mongoose } = require('../config/db');
 
-const createEvent = async ({
-  title,
-  description,
-  images,
-  location,
-  start_time,
-  end_time,
-  max_participants,
-  category_id,
-  created_by,
-  google_sheet_id = null,
-  google_sheet_name = null
-}) => {
-  const pool = await poolPromise;
-  const result = await pool
-    .request()
-    .input('title', sql.NVarChar(255), title)
-    .input('description', sql.NVarChar(sql.MAX), description || null)
-    .input('images', sql.NVarChar(sql.MAX), images || null)
-    .input('location', sql.NVarChar(255), location)
-    .input('start_time', sql.DateTime2, new Date(start_time))
-    .input('end_time', sql.DateTime2, new Date(end_time))
-    .input('max_participants', sql.Int, max_participants)
-    .input('category_id', sql.Int, category_id || null)
-    .input('created_by', sql.Int, created_by)
-    .input('google_sheet_id', sql.NVarChar(255), google_sheet_id)
-    .input('google_sheet_name', sql.NVarChar(255), google_sheet_name)
-    .query(
-      `INSERT INTO events (title, description, images, location, start_time, end_time, max_participants, category_id, created_by, google_sheet_id, google_sheet_name, is_active, created_at)
-       VALUES (@title, @description, @images, @location, @start_time, @end_time, @max_participants, @category_id, @created_by, @google_sheet_id, @google_sheet_name, 1, SYSUTCDATETIME());
-       SELECT SCOPE_IDENTITY() AS id;`
-    );
-  return result.recordset[0].id;
-};
+const eventSchema = new mongoose.Schema(
+  {
+    legacy_sql_id: {
+      type: Number,
+      index: true,
+      default: null,
+    },
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    description: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    location: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    start_time: {
+      type: Date,
+      required: true,
+    },
+    end_time: {
+      type: Date,
+      required: true,
+    },
+    max_participants: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+    category_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
+    google_sheet_id: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    google_sheet_name: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    images: {
+      type: [String],
+      default: [],
+    },
+    is_active: {
+      type: Boolean,
+      default: true,
+    },
+    created_by: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+  },
+  {
+    timestamps: true,
+    versionKey: false,
+  }
+);
 
-const getAllEvents = async (offset = 0, limit = 10) => {
-  const pool = await poolPromise;
-  const result = await pool
-    .request()
-    .input('offset', sql.Int, offset)
-    .input('limit', sql.Int, limit)
-    .query(
-      `SELECT e.*, c.name AS category_name,
-       (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status != 'cancelled') AS registered_count,
-       (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status = 'attended') AS checked_in_count
-       FROM events e
-       LEFT JOIN event_categories c ON e.category_id = c.id
-       WHERE e.is_active = 1
-       ORDER BY 
-         CASE 
-           WHEN e.start_time <= SYSUTCDATETIME() AND e.end_time >= SYSUTCDATETIME() THEN 0 
-           WHEN e.start_time > SYSUTCDATETIME() THEN 1 
-           ELSE 2 
-         END ASC,
-         e.start_time ASC
-       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`
-    );
-  return result.recordset;
-};
+eventSchema.set('toJSON', {
+  transform: (_doc, ret) => {
+    ret.id = ret._id.toString();
+    delete ret._id;
+    return ret;
+  },
+});
 
-const getEventById = async (id) => {
-  const pool = await poolPromise;
-  const result = await pool
-    .request()
-    .input('id', sql.Int, id)
-    .query(
-      `SELECT e.*, c.name AS category_name,
-       (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status != 'cancelled') AS registered_count,
-       (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status = 'attended') AS checked_in_count
-       FROM events e
-       LEFT JOIN event_categories c ON e.category_id = c.id
-       WHERE e.id = @id`
-    );
-  return result.recordset[0] || null;
-};
+eventSchema.index({ is_active: 1, start_time: 1 });
+eventSchema.index({ created_by: 1, createdAt: -1 });
 
-const updateEvent = async (id, fields) => {
-  const pool = await poolPromise;
-  const req = pool.request().input('id', sql.Int, id);
-  if (fields.title != null) req.input('title', sql.NVarChar(255), fields.title);
-  if (fields.description != null) req.input('description', sql.NVarChar(sql.MAX), fields.description);
-  if (fields.images !== undefined) req.input('images', sql.NVarChar(sql.MAX), fields.images);
-  if (fields.location != null) req.input('location', sql.NVarChar(255), fields.location);
-  if (fields.start_time != null) req.input('start_time', sql.DateTime2, new Date(fields.start_time));
-  if (fields.end_time != null) req.input('end_time', sql.DateTime2, new Date(fields.end_time));
-  if (fields.max_participants != null) req.input('max_participants', sql.Int, fields.max_participants);
-  if (fields.category_id != null) req.input('category_id', sql.Int, fields.category_id);
-  if (fields.google_sheet_id != null) req.input('google_sheet_id', sql.NVarChar(255), fields.google_sheet_id);
-  if (fields.google_sheet_name != null) req.input('google_sheet_name', sql.NVarChar(255), fields.google_sheet_name);
-  if (fields.is_active !== undefined) req.input('is_active', sql.Bit, fields.is_active ? 1 : 0);
-  const updates = [];
-  if (fields.title != null) updates.push('title = @title');
-  if (fields.description != null) updates.push('description = @description');
-  if (fields.images !== undefined) updates.push('images = @images');
-  if (fields.location != null) updates.push('location = @location');
-  if (fields.start_time != null) updates.push('start_time = @start_time');
-  if (fields.end_time != null) updates.push('end_time = @end_time');
-  if (fields.max_participants != null) updates.push('max_participants = @max_participants');
-  if (fields.category_id != null) updates.push('category_id = @category_id');
-  if (fields.google_sheet_id != null) updates.push('google_sheet_id = @google_sheet_id');
-  if (fields.google_sheet_name != null) updates.push('google_sheet_name = @google_sheet_name');
-  if (fields.is_active !== undefined) updates.push('is_active = @is_active');
-  if (updates.length === 0) return;
-  await req.query(`UPDATE events SET ${updates.join(', ')} WHERE id = @id`);
-};
-
-const softDeleteEvent = async (id) => {
-  const pool = await poolPromise;
-  await pool
-    .request()
-    .input('id', sql.Int, id)
-    .query('UPDATE events SET is_active = 0 WHERE id = @id');
-};
-
-const getEventsByOrganizer = async (created_by, offset = 0, limit = 10) => {
-  const pool = await poolPromise;
-  const result = await pool
-    .request()
-    .input('created_by', sql.Int, created_by)
-    .input('offset', sql.Int, offset)
-    .input('limit', sql.Int, limit)
-    .query(
-      `SELECT e.*, c.name AS category_name,
-       (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status != 'cancelled') AS registered_count,
-       (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status = 'attended') AS checked_in_count
-       FROM events e
-       LEFT JOIN event_categories c ON e.category_id = c.id
-       WHERE e.created_by = @created_by AND e.is_active = 1
-       ORDER BY 
-         CASE 
-           WHEN e.start_time <= SYSUTCDATETIME() AND e.end_time >= SYSUTCDATETIME() THEN 0 
-           WHEN e.start_time > SYSUTCDATETIME() THEN 1 
-           ELSE 2 
-         END ASC,
-         e.start_time ASC
-       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`
-    );
-  return result.recordset;
-};
-
-const getEventParticipants = async (event_id) => {
-  const pool = await poolPromise;
-  const result = await pool
-    .request()
-    .input('event_id', sql.Int, event_id)
-    .query(
-      `SELECT
-        r.id AS registration_id,
-        r.user_id,
-        u.full_name AS student_name,
-        u.student_code,
-        u.email,
-        r.status AS registration_status,
-        a.checkin_time
-       FROM registrations r
-       JOIN users u ON r.user_id = u.id
-       LEFT JOIN attendances a ON a.registration_id = r.id
-       WHERE r.event_id = @event_id AND r.status != 'cancelled'
-       ORDER BY r.registered_at ASC`
-    );
-  return result.recordset;
-};
-
-const countRegistrationsForEvent = async (event_id) => {
-  const pool = await poolPromise;
-  const result = await pool
-    .request()
-    .input('event_id', sql.Int, event_id)
-    .query("SELECT COUNT(*) as count FROM registrations WHERE event_id = @event_id AND status != 'cancelled'");
-  return result.recordset[0].count;
-};
-
-const countAllEvents = async () => {
-  const pool = await poolPromise;
-  const result = await pool
-    .request()
-    .query('SELECT COUNT(*) as total FROM events WHERE is_active = 1');
-  return result.recordset[0].total;
-};
-
-const countEventsByOrganizer = async (created_by) => {
-  const pool = await poolPromise;
-  const result = await pool
-    .request()
-    .input('created_by', sql.Int, created_by)
-    .query('SELECT COUNT(*) as total FROM events WHERE created_by = @created_by AND is_active = 1');
-  return result.recordset[0].total;
-};
-
-module.exports = {
-  createEvent,
-  getAllEvents,
-  getEventById,
-  getEventsByOrganizer,
-  getEventParticipants,
-  updateEvent,
-  softDeleteEvent,
-  countRegistrationsForEvent,
-  countAllEvents,
-  countEventsByOrganizer
-};
+module.exports = mongoose.models.Event || mongoose.model('Event', eventSchema);

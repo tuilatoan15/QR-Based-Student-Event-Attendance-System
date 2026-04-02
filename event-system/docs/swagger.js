@@ -1,292 +1,72 @@
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 
-const options = {
+const spec = swaggerJsdoc({
   definition: {
     openapi: '3.0.0',
     info: {
       title: 'QR-Based Student Event Attendance API',
-      version: '1.0.0',
-      description: 'Backend API for event registration and QR-based attendance check-in'
+      version: '2.0.0',
+      description: 'MongoDB + Mongoose backend for registration and attendance',
     },
-    servers: [
-      { url: 'http://localhost:5000', description: 'Development' }
-    ],
+    servers: [{ url: 'http://localhost:5000', description: 'Local server' }],
     components: {
       securitySchemes: {
         bearerAuth: {
           type: 'http',
           scheme: 'bearer',
-          bearerFormat: 'JWT'
-        }
+          bearerFormat: 'JWT',
+        },
       },
-      schemas: {
-        SuccessResponse: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            message: { type: 'string' },
-            data: { type: 'object' }
-          }
-        },
-        PaginatedSuccessResponse: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            message: { type: 'string' },
-            data: {
-              type: 'array',
-              items: { type: 'object' }
-            },
-            pagination: {
-              type: 'object',
-              properties: {
-                page: { type: 'integer', example: 1 },
-                limit: { type: 'integer', example: 10 }
-              }
-            }
-          }
-        },
-        ErrorResponse: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string' }
-          }
-        },
-        RegisterBody: {
-          type: 'object',
-          required: ['full_name', 'email', 'password'],
-          properties: {
-            full_name: { type: 'string', example: 'John Doe' },
-            email: { type: 'string', format: 'email', example: 'student@example.com' },
-            password: { type: 'string', format: 'password' },
-            student_code: { type: 'string', nullable: true }
-          }
-        },
-        LoginBody: {
-          type: 'object',
-          required: ['email', 'password'],
-          properties: {
-            email: { type: 'string', format: 'email' },
-            password: { type: 'string', format: 'password' }
-          }
-        },
-        EventBody: {
-          type: 'object',
-          required: ['title', 'location', 'start_time', 'end_time', 'max_participants'],
-          properties: {
-            title: { type: 'string' },
-            description: { type: 'string', nullable: true },
-            location: { type: 'string' },
-            start_time: { type: 'string', format: 'date-time' },
-            end_time: { type: 'string', format: 'date-time' },
-            max_participants: { type: 'integer', minimum: 1 },
-            category_id: { type: 'integer', nullable: true }
-          }
-        },
-        CheckinBody: {
-          type: 'object',
-          required: ['qr_token'],
-          properties: {
-            qr_token: { type: 'string', description: 'UUID from registration' }
-          }
-        }
-      }
     },
-    tags: [
-      { name: 'Auth', description: 'Authentication' },
-      { name: 'Events', description: 'Event CRUD' },
-      { name: 'Registration', description: 'Event registration' },
-      { name: 'Attendance', description: 'QR check-in' },
-      { name: 'Users', description: 'User events' },
-      { name: 'Health', description: 'Service health' }
-    ]
+    paths: {
+      '/api/auth/register': {
+        post: {
+          tags: ['Auth'],
+          summary: 'Register a student account',
+        },
+      },
+      '/api/auth/login': {
+        post: {
+          tags: ['Auth'],
+          summary: 'Login and get a JWT token',
+        },
+      },
+      '/api/events': {
+        get: {
+          tags: ['Events'],
+          summary: 'List active events',
+        },
+        post: {
+          tags: ['Events'],
+          summary: 'Create a new event',
+          security: [{ bearerAuth: [] }],
+        },
+      },
+      '/api/events/{id}/register': {
+        post: {
+          tags: ['Registration'],
+          summary: 'Register the authenticated user for an event',
+          security: [{ bearerAuth: [] }],
+        },
+      },
+      '/api/attendance/check-in': {
+        post: {
+          tags: ['Attendance'],
+          summary: 'Check in an attendee using their QR token',
+          security: [{ bearerAuth: [] }],
+        },
+      },
+    },
   },
-  apis: []
+  apis: [],
+});
+
+const setupSwagger = (app) => {
+  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(spec));
 };
 
-const spec = swaggerJsdoc(options);
-
-// Manual paths (no JSDoc in controllers)
-spec.paths = {
-  '/api/auth/register': {
-    post: {
-      tags: ['Auth'],
-      summary: 'Register',
-      requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/RegisterBody' } } } },
-      responses: {
-        201: { description: 'Registered', content: { 'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } } } },
-        400: { description: 'Bad request', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
-        409: { description: 'Email already registered', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
-      }
-    }
-  },
-  '/api/auth/login': {
-    post: {
-      tags: ['Auth'],
-      summary: 'Login',
-      requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/LoginBody' } } } },
-      responses: {
-        200: { description: 'Login success', content: { 'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } } } },
-        401: { description: 'Invalid credentials', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
-      }
-    }
-  },
-  '/api/events': {
-    get: {
-      tags: ['Events'],
-      summary: 'List events',
-      parameters: [
-        {
-          name: 'page',
-          in: 'query',
-          required: false,
-          schema: { type: 'integer', minimum: 1 },
-          description: 'Page number (default 1)'
-        },
-        {
-          name: 'limit',
-          in: 'query',
-          required: false,
-          schema: { type: 'integer', minimum: 1 },
-          description: 'Page size (default 10)'
-        }
-      ],
-      responses: {
-        200: {
-          description: 'List of events (paginated)',
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/PaginatedSuccessResponse' } } }
-        }
-      }
-    },
-    post: {
-      tags: ['Events'],
-      summary: 'Create event',
-      security: [{ bearerAuth: [] }],
-      requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/EventBody' } } } },
-      responses: {
-        201: { description: 'Created', content: { 'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } } } },
-        401: { description: 'Unauthorized', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
-      }
-    }
-  },
-  '/api/events/{id}': {
-    get: {
-      tags: ['Events'],
-      summary: 'Get event by id',
-      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-      responses: {
-        200: { description: 'Event', content: { 'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } } } },
-        404: { description: 'Not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
-      }
-    },
-    put: {
-      tags: ['Events'],
-      summary: 'Update event',
-      security: [{ bearerAuth: [] }],
-      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-      requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/EventBody' } } } },
-      responses: {
-        200: { description: 'Updated', content: { 'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } } } },
-        404: { description: 'Not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
-      }
-    },
-    delete: {
-      tags: ['Events'],
-      summary: 'Delete event (soft)',
-      security: [{ bearerAuth: [] }],
-      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-      responses: {
-        200: { description: 'Deleted', content: { 'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } } } },
-        404: { description: 'Not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
-      }
-    }
-  },
-  '/api/events/{id}/register': {
-    post: {
-      tags: ['Registration'],
-      summary: 'Register for event',
-      security: [{ bearerAuth: [] }],
-      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-      responses: {
-        201: { description: 'Registered; returns qr_token and qr_code (image data URL)', content: { 'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } } } },
-        400: { description: 'Already registered or event full', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
-        404: { description: 'Event not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
-      }
-    }
-  },
-  '/api/events/{id}/registrations': {
-    get: {
-      tags: ['Events'],
-      summary: 'List registrations for event',
-      security: [{ bearerAuth: [] }],
-      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-      responses: {
-        200: { description: 'List of registrations', content: { 'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } } } }
-      }
-    }
-  },
-  '/api/events/{id}/attendances': {
-    get: {
-      tags: ['Attendance'],
-      summary: 'List attendances for event',
-      security: [{ bearerAuth: [] }],
-      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-      responses: {
-        200: { description: 'List of attendances', content: { 'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } } } }
-      }
-    }
-  },
-  '/api/users/me/events': {
-    get: {
-      tags: ['Users'],
-      summary: 'Current user registered events',
-      security: [{ bearerAuth: [] }],
-      responses: {
-        200: { description: 'List of user events', content: { 'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } } } }
-      }
-    }
-  },
-  '/api/attendance/checkin': {
-    post: {
-      tags: ['Attendance'],
-      summary: 'Check-in by QR token',
-      security: [{ bearerAuth: [] }],
-      requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/CheckinBody' } } } },
-      responses: {
-        200: { description: 'Check-in successful', content: { 'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } } } },
-        400: { description: 'Invalid request body or QR token missing', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
-        409: { description: 'Already checked in', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
-        404: { description: 'Invalid QR code', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
-      }
-    }
-  },
-  '/health': {
-    get: {
-      tags: ['Health'],
-      summary: 'Health check',
-      responses: {
-        200: {
-          description: 'Service is healthy',
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  status: { type: 'string', example: 'ok' }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+module.exports = {
+  setupSwagger,
+  spec,
 };
-
-function setupSwagger(app) {
-  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(spec, { explorer: true }));
-}
-
-module.exports = { setupSwagger, spec };

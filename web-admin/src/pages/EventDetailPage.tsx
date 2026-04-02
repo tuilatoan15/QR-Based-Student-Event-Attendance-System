@@ -5,7 +5,7 @@ import { exportToCsv, exportToXlsx } from '../utils/exporters';
 import DOMPurify from 'dompurify';
 
 const STATUS_MAP: Record<string, { label: string; bg: string; color: string }> = {
-  attended: { label: 'Đã check-in', bg: '#f0fdf4', color: '#15803d' },
+  attended: { label: 'Đã điểm danh', bg: '#f0fdf4', color: '#15803d' },
   registered: { label: 'Đã đăng ký', bg: '#eff6ff', color: '#1d4ed8' },
   cancelled: { label: 'Đã huỷ', bg: '#fff1f2', color: '#be123c' },
 };
@@ -25,8 +25,8 @@ const EventDetailPage: React.FC = () => {
       setLoading(true); setError(null);
       try {
         const [evRes, partRes] = await Promise.all([
-          eventApi.getEvent(Number(id)),
-          eventApi.getEventRegistrations(Number(id)),
+          eventApi.getEvent(id),
+          eventApi.getEventRegistrations(id),
         ]);
         setEvent((evRes.data.data ?? evRes.data) as Event);
         const pd = partRes.data.data ?? partRes.data;
@@ -47,11 +47,11 @@ const EventDetailPage: React.FC = () => {
   }, [participants]);
 
   const doExportCsv = () => {
-    const h = ['Reg ID', 'Tên sinh viên', 'Email', 'Mã SV', 'Trạng thái', 'Giờ check-in'];
+    const h = ['Reg ID', 'Tên sinh viên', 'Email', 'Mã SV', 'Trạng thái', 'Giờ điểm danh'];
     exportToCsv(`event-${id}-participants.csv`, h, participants.map(p => [p.registration_id ?? '', p.student_name ?? '', p.email ?? '', p.student_code ?? '', p.registration_status ?? '', p.checkin_time ? new Date(p.checkin_time).toLocaleString('vi-VN') : '']));
   };
   const doExportXlsx = () => {
-    const h = ['Reg ID', 'Tên sinh viên', 'Email', 'Mã SV', 'Trạng thái', 'Giờ check-in'];
+    const h = ['Reg ID', 'Tên sinh viên', 'Email', 'Mã SV', 'Trạng thái', 'Giờ điểm danh'];
     exportToXlsx(`event-${id}-participants.xlsx`, 'Participants', h, participants.map(p => [p.registration_id ?? '', p.student_name ?? '', p.email ?? '', p.student_code ?? '', p.registration_status ?? '', p.checkin_time ? new Date(p.checkin_time).toLocaleString('vi-VN') : '']));
   };
 
@@ -199,7 +199,7 @@ const EventDetailPage: React.FC = () => {
           </div>
           <div className="edp-stat">
             <div className="edp-stat-v" style={{ color: '#15803d' }}>{stats.attended}</div>
-            <div className="edp-stat-l">Đã check-in</div>
+            <div className="edp-stat-l">Đã điểm danh</div>
             <div className="edp-stat-bar"><div className="edp-stat-fill" style={{ width: `${stats.pct}%`, background: 'linear-gradient(90deg,#4ade80,#22c55e)' }} /></div>
           </div>
           <div className="edp-stat">
@@ -213,20 +213,20 @@ const EventDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Images Gallery */}
+        {/* Banner Section */}
         {event.images && (() => {
           let imgs: string[] = [];
-          try {
-             imgs = JSON.parse(event.images);
-          } catch(e) {}
+          if (Array.isArray(event.images)) {
+            imgs = event.images;
+          } else if (typeof event.images === 'string') {
+            try { imgs = JSON.parse(event.images); } catch(e) {}
+          }
           if (imgs.length === 0) return null;
           return (
             <div className="edp-desc-card">
               <div className="edp-section-title">Banner sự kiện</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {imgs.map((url, i) => (
-                  <img key={i} src={url.startsWith('http') ? url : `http://localhost:5000${url}`} alt="" style={{ width: '100%', borderRadius: 8, objectFit: 'cover' }} />
-                ))}
+                <img src={imgs[0].startsWith('http') || imgs[0].startsWith('data:') ? imgs[0] : `http://localhost:5000${imgs[0]}`} alt="Banner" style={{ width: '100%', height: 'auto', borderRadius: 12, display: 'block' }} />
               </div>
             </div>
           );
@@ -246,7 +246,7 @@ const EventDetailPage: React.FC = () => {
             <div>
               <div className="edp-part-title">Danh sách tham dự viên</div>
               <div style={{ fontSize: 12.5, color: '#94a3b8', marginTop: 3 }}>
-                {stats.total} đăng ký · {stats.attended} check-in · {stats.cancelled} huỷ
+                {stats.total} đăng ký · {stats.attended} điểm danh · {stats.cancelled} huỷ
               </div>
             </div>
             <div className="edp-part-actions">
@@ -274,7 +274,7 @@ const EventDetailPage: React.FC = () => {
           <div style={{ overflowX: 'auto' }}>
             <table className="edp-table">
               <thead><tr>
-                <th>Sinh viên</th><th>Email</th><th>Trạng thái</th><th>Giờ check-in</th>
+                <th>Sinh viên</th><th>Email</th><th>Trạng thái</th><th>Giờ điểm danh</th>
               </tr></thead>
               <tbody>
                 {participants.slice(0, 20).map((p, idx) => {

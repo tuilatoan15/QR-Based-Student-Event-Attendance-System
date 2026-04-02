@@ -27,7 +27,7 @@ const QRScannerPage: React.FC = () => {
         return;
       }
       
-      let message = res.data?.message || 'Check-in thành công!';
+      let message = res.data?.message || 'Điểm danh thành công!';
       
       if (studentName) {
         message = `${studentName}: ${message}`;
@@ -37,7 +37,7 @@ const QRScannerPage: React.FC = () => {
       setScanCount(c => c + 1);
     } catch (err: any) {
       const backendMessage = err?.response?.data?.message;
-      setError(backendMessage || 'Check-in thất bại. Vui lòng kiểm tra mã QR.');
+      setError(backendMessage || 'Điểm danh thất bại. Vui lòng kiểm tra mã QR.');
     } finally {
       setProcessing(false);
     }
@@ -133,7 +133,7 @@ const QRScannerPage: React.FC = () => {
               {processing && (
                 <div className="qr-processing">
                   <div className="qr-spin"/>
-                  Đang xử lý check-in...
+                  Đang xử lý điểm danh...
                 </div>
               )}
 
@@ -176,7 +176,7 @@ const QRScannerPage: React.FC = () => {
                 <div className="qr-stats">
                   <div className="qr-stat">
                     <div className="qr-stat-val" style={{color:'#22c55e'}}>{scanCount}</div>
-                    <div className="qr-stat-lbl">Đã check-in</div>
+                    <div className="qr-stat-lbl">Đã điểm danh</div>
                   </div>
                   <div className="qr-stat">
                     <div className="qr-stat-val" style={{color:error?'#f43f5e':'#94a3b8'}}>{error ? 1 : 0}</div>

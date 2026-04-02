@@ -56,7 +56,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() {});
     if (auth.errorMessage != null) {
-      if (auth.errorMessage!.contains('phe duyet') ||
+      if (auth.errorMessage!.contains('phê duyệt') ||
+          auth.errorMessage!.contains('cho phe') ||
           auth.errorMessage!.contains('duyet')) {
         _showStatusDialog(
           'Chờ duyệt',
@@ -64,7 +65,8 @@ class _LoginScreenState extends State<LoginScreen> {
           Icons.hourglass_empty_rounded,
           Colors.orange,
         );
-      } else if (auth.errorMessage!.contains('tu choi')) {
+      } else if (auth.errorMessage!.contains('từ chối') ||
+          auth.errorMessage!.contains('tu choi')) {
         _showStatusDialog(
           'Từ chối',
           auth.errorMessage!,
@@ -224,31 +226,129 @@ class _LoginScreenState extends State<LoginScreen> {
     IconData icon,
     Color color,
   ) {
+    // Phân tách nội dung "Lý do" nếu có để hiển thị đẹp hơn
+    String displayTitle = title;
+    String displayMessage = message;
+    String? reason;
+
+    if (message.contains('Lý do:')) {
+      final parts = message.split('Lý do:');
+      displayMessage = parts[0].trim();
+      reason = parts[1].trim();
+    }
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(icon, color: color),
-            const SizedBox(width: 8),
-            Text(
-              title,
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
+      barrierDismissible: true,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
               ),
-            ),
-          ],
-        ),
-        content: Text(message, style: const TextStyle(fontSize: 15)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Đóng'),
+            ],
           ),
-        ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: color, size: 36),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                displayTitle,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                displayMessage,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 15,
+                  color: Color(0xFF64748B),
+                  height: 1.5,
+                ),
+              ),
+              if (reason != null && reason.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFF),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'LÝ DO TỪ CHỐI:',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: color,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        reason,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF334155),
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF1F5F9),
+                    foregroundColor: const Color(0xFF475569),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: const Text(
+                    'Đóng',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

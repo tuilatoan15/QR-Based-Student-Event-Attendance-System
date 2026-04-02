@@ -5,10 +5,8 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:html_editor_enhanced/html_editor.dart';
-import 'package:http/http.dart' as http;
 import 'dart:io';
-
-import '../../config/api_config.dart';
+import 'package:smart_event_attendance_mobile/config/api_config.dart';
 import '../../services/organizer_service.dart';
 import '../../models/event.dart';
 
@@ -48,7 +46,7 @@ class _OrganizerEventFormScreenState extends State<OrganizerEventFormScreen> {
     _endTime = e?.endTime;
     
     if (e != null && e.images.isNotEmpty) {
-      _existingImages = List.from(e.images);
+      _existingImages = [e.images.first];
     }
   }
 
@@ -61,16 +59,11 @@ class _OrganizerEventFormScreenState extends State<OrganizerEventFormScreen> {
   }
 
   Future<void> _pickImages() async {
-    final picked = await _picker.pickMultiImage();
-    if (picked.isNotEmpty) {
-      if (_selectedFiles.length + _existingImages.length + picked.length > 10) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tối đa 10 hình ảnh')));
-        }
-        return;
-      }
+    final picked = await _picker.pickImage(source: ImageSource.gallery);
+    if (picked != null) {
       setState(() {
-        _selectedFiles.addAll(picked.map((x) => File(x.path)));
+        _selectedFiles = [File(picked.path)];
+        _existingImages = []; // Replace existing banner with new one
       });
     }
   }
@@ -141,23 +134,15 @@ class _OrganizerEventFormScreenState extends State<OrganizerEventFormScreen> {
   }
 
   Future<void> _handleCustomImageUpload(FileUpload file) async {
-    // Custom logic to upload the isolated editor image inline to /editor-image endpoint
+    // Insert inline images as data URLs so the mobile app does not depend on a separate upload API.
     try {
       if (file.base64 == null) return;
       final String b64 = file.base64!.split(",").last;
-      final bytes = base64Decode(b64);
-
-      final request = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/api/upload/editor-image'));
-      request.files.add(http.MultipartFile.fromBytes('image', bytes, filename: file.name ?? 'image.png'));
-      final res = await request.send();
-      final resData = jsonDecode(await res.stream.bytesToString());
-      
-      if (resData['success'] == true) {
-        final url = ApiConfig.resolveMediaUrl(resData["url"].toString());
-        _htmlCtrl.insertNetworkImage(url, filename: file.name ?? '');
-      } else {
-        throw Exception();
-      }
+      final mimeType = (file.name ?? '').toLowerCase().endsWith('.png')
+          ? 'image/png'
+          : 'image/jpeg';
+      final dataUrl = 'data:$mimeType;base64,$b64';
+      _htmlCtrl.insertNetworkImage(dataUrl, filename: file.name ?? '');
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lỗi upload ảnh văn bản'), backgroundColor: Colors.red));
@@ -220,7 +205,7 @@ class _OrganizerEventFormScreenState extends State<OrganizerEventFormScreen> {
               ),
               const SizedBox(height: 16),
               
-              const Text('Hình ảnh Gallery', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF374151))),
+              const Text('Banner sự kiện', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF374151))),
               const SizedBox(height: 8),
               InkWell(
                 onTap: _pickImages,
@@ -228,7 +213,7 @@ class _OrganizerEventFormScreenState extends State<OrganizerEventFormScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE0E0E0), style: BorderStyle.solid), borderRadius: BorderRadius.circular(12), color: Colors.white),
-                  child: const Center(child: Text('+ Thêm ảnh dự phòng (Tối đa 10 ảnh)', style: TextStyle(color: Colors.blueAccent))),
+                  child: const Center(child: Text('+ Chọn hình ảnh banner sự kiện', style: TextStyle(color: Colors.blueAccent))),
                 ),
               ),
               if (_existingImages.isNotEmpty || _selectedFiles.isNotEmpty) ...[

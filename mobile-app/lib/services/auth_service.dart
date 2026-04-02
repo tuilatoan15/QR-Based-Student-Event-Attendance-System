@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -241,10 +242,13 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await _api.postMultipart(
+      final bytes = await File(filePath).readAsBytes();
+      final response = await _api.patch(
         '/api/users/me/avatar',
-        filePath: filePath,
-        fieldName: 'avatar',
+        body: {
+          'avatar': 'data:image/jpeg;base64,${base64Encode(bytes)}',
+        },
+        authenticated: true,
       );
 
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;

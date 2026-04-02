@@ -1,7 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import '../models/event.dart';
@@ -19,6 +19,17 @@ class OrganizerService extends ChangeNotifier {
   bool isLoading = false;
   String? errorMessage;
 
+  Future<String> _encodeImageFile(String path) async {
+    final extension = path.split('.').last.toLowerCase();
+    final mimeType = extension == 'png'
+        ? 'image/png'
+        : extension == 'webp'
+            ? 'image/webp'
+            : 'image/jpeg';
+    final bytes = await File(path).readAsBytes();
+    return 'data:$mimeType;base64,${base64Encode(bytes)}';
+  }
+
   // ─── Organizer Events ───────────────────────────────────────────────────────
 
   Future<void> fetchMyEvents() async {
@@ -27,17 +38,17 @@ class OrganizerService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await _api.get('/api/events/organizer/events', authenticated: true);
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final response = await _api.get('/api/events/organizer/events?limit=100', authenticated: true);
+      final decoded = jsonDecode(response.body);
 
-      if (response.statusCode == 200 && decoded['success'] == true) {
+      if (response.statusCode == 200 && decoded is Map && decoded['success'] == true) {
         final data = decoded['data'] as List<dynamic>? ?? [];
         myEvents = data.map((e) => Event.fromJson(e as Map<String, dynamic>)).toList();
       } else {
-        errorMessage = decoded['message'] as String? ?? 'Lỗi tải sự kiện';
+        errorMessage = decoded is Map ? decoded['message'] : 'Lỗi tải sự kiện';
       }
     } catch (e) {
-      errorMessage = 'Không thể tải sự kiện. Vui lòng thử lại.';
+      errorMessage = 'Không thể tải sự kiện. Lỗi: $e';
     }
 
     isLoading = false;
@@ -50,28 +61,25 @@ class OrganizerService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final files = <http.MultipartFile>[];
-      for (final path in filePaths) {
-        files.add(await http.MultipartFile.fromPath('images', path));
-      }
-
-      final response = await _api.sendMultipart(
-        'POST',
+      final encodedImages = await Future.wait(filePaths.map(_encodeImageFile));
+      final response = await _api.post(
         '/api/events',
-        fields: fields,
-        files: files,
+        body: {
+          ...fields,
+          'images': encodedImages,
+        },
         authenticated: true,
       );
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final decoded = jsonDecode(response.body);
 
-      if ((response.statusCode == 200 || response.statusCode == 201) && decoded['success'] == true) {
+      if ((response.statusCode == 200 || response.statusCode == 201) && decoded is Map && decoded['success'] == true) {
         await fetchMyEvents();
         return true;
       } else {
-        errorMessage = decoded['message'] as String? ?? 'Lỗi tạo sự kiện';
+        errorMessage = decoded is Map ? decoded['message'] : 'Lỗi tạo sự kiện';
       }
     } catch (e) {
-      errorMessage = 'Không thể tạo sự kiện. Vui lòng thử lại.';
+      errorMessage = 'Không thể tạo sự kiện. Lỗi: $e';
     }
 
     isLoading = false;
@@ -79,40 +87,31 @@ class OrganizerService extends ChangeNotifier {
     return false;
   }
 
-  Future<bool> updateEvent(int id, Map<String, String> fields, List<String> filePaths, List<String> existingImages) async {
+  Future<bool> updateEvent(dynamic id, Map<String, String> fields, List<String> filePaths, List<String> existingImages) async {
     isLoading = true;
     errorMessage = null;
     notifyListeners();
 
     try {
-      final files = <http.MultipartFile>[];
-      for (final path in filePaths) {
-        files.add(await http.MultipartFile.fromPath('images', path));
-      }
-      
-      if (existingImages.isNotEmpty) {
-        fields['images'] = jsonEncode(existingImages);
-      } else if (files.isEmpty) {
-        fields['images'] = '[]';
-      }
-
-      final response = await _api.sendMultipart(
-        'PUT',
+      final newImages = await Future.wait(filePaths.map(_encodeImageFile));
+      final response = await _api.put(
         '/api/events/$id',
-        fields: fields,
-        files: files,
+        body: {
+          ...fields,
+          'images': [...existingImages, ...newImages],
+        },
         authenticated: true,
       );
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final decoded = jsonDecode(response.body);
 
-      if (response.statusCode == 200 && decoded['success'] == true) {
+      if (response.statusCode == 200 && decoded is Map && decoded['success'] == true) {
         await fetchMyEvents();
         return true;
       } else {
-        errorMessage = decoded['message'] as String? ?? 'Lỗi cập nhật sự kiện';
+        errorMessage = decoded is Map ? decoded['message'] : 'Lỗi cập nhật sự kiện';
       }
     } catch (e) {
-      errorMessage = 'Không thể cập nhật sự kiện. Vui lòng thử lại.';
+      errorMessage = 'Không thể cập nhật sự kiện. Lỗi: $e';
     }
 
     isLoading = false;
@@ -120,25 +119,25 @@ class OrganizerService extends ChangeNotifier {
     return false;
   }
 
-  Future<bool> deleteEvent(int id) async {
+  Future<bool> deleteEvent(dynamic id) async {
     isLoading = true;
     errorMessage = null;
     notifyListeners();
 
     try {
       final response = await _api.delete('/api/events/$id', authenticated: true);
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final decoded = jsonDecode(response.body);
 
-      if (response.statusCode == 200 && decoded['success'] == true) {
-        myEvents.removeWhere((e) => e.id == id);
+      if (response.statusCode == 200 && decoded is Map && decoded['success'] == true) {
+        myEvents.removeWhere((e) => e.id.toString() == id.toString());
         isLoading = false;
         notifyListeners();
         return true;
       } else {
-        errorMessage = decoded['message'] as String? ?? 'Lỗi xóa sự kiện';
+        errorMessage = decoded is Map ? decoded['message'] : 'Lỗi xóa sự kiện';
       }
     } catch (e) {
-      errorMessage = 'Không thể xóa sự kiện. Vui lòng thử lại.';
+      errorMessage = 'Không thể xóa sự kiện. Lỗi: $e';
     }
 
     isLoading = false;
@@ -148,23 +147,23 @@ class OrganizerService extends ChangeNotifier {
 
   // ─── Participants (registrations) ──────────────────────────────────────────
 
-  Future<void> fetchParticipants(int eventId) async {
+  Future<void> fetchParticipants(dynamic eventId) async {
     isLoading = true;
     errorMessage = null;
     notifyListeners();
 
     try {
       final response = await _api.get('/api/events/$eventId/registrations', authenticated: true);
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final decoded = jsonDecode(response.body);
 
-      if (response.statusCode == 200 && decoded['success'] == true) {
+      if (response.statusCode == 200 && decoded is Map && decoded['success'] == true) {
         final data = decoded['data'] as List<dynamic>? ?? [];
         participants = data.map((e) => Participant.fromJson(e as Map<String, dynamic>)).toList();
       } else {
-        errorMessage = decoded['message'] as String? ?? 'Lỗi tải danh sách';
+        errorMessage = decoded is Map ? decoded['message'] : 'Lỗi tải danh sách';
       }
     } catch (e) {
-      errorMessage = 'Không thể tải danh sách. Vui lòng thử lại.';
+      errorMessage = 'Không thể tải danh sách. Lỗi: $e';
     }
 
     isLoading = false;
@@ -173,29 +172,28 @@ class OrganizerService extends ChangeNotifier {
 
   // ─── Attendance (check-in records) ────────────────────────────────────────
 
-  Future<void> fetchAttendanceForEvent(int eventId) async {
+  Future<void> fetchAttendanceForEvent(dynamic eventId) async {
     isLoading = true;
     errorMessage = null;
     notifyListeners();
 
     try {
       final response = await _api.get(
-        '/api/attendance?event_id=$eventId',
+        '/api/attendance/event/$eventId',
         authenticated: true,
       );
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final decoded = jsonDecode(response.body);
 
-      if (response.statusCode == 200) {
-        // API may return data directly or wrapped
+      if (response.statusCode == 200 && decoded is Map) {
         final rawData = decoded['data'] ?? decoded;
         final List<dynamic> data = rawData is List ? rawData : [];
         attendance = data.map((e) {
           final m = e as Map<String, dynamic>;
           return Participant(
-            id: (m['user_id'] ?? m['id'] ?? 0) as int,
+            id: m['user_id']?.toString() ?? m['id']?.toString() ?? '',
             fullName: (m['student_name'] ?? m['full_name'] ?? m['name'] ?? '') as String,
             email: (m['email'] ?? '') as String,
-            studentCode: m['student_code'] as String?,
+            studentCode: m['student_code']?.toString(),
             status: m['registration_status'] == 'cancelled'
                 ? 'cancelled'
                 : (m['registration_status'] == 'attended' || m['status'] == 'checked_in')
@@ -207,10 +205,10 @@ class OrganizerService extends ChangeNotifier {
           );
         }).toList();
       } else {
-        errorMessage = decoded['message'] as String? ?? 'Lỗi tải điểm danh';
+        errorMessage = decoded is Map ? decoded['message'] : 'Lỗi tải điểm danh';
       }
     } catch (e) {
-      errorMessage = 'Không thể tải điểm danh. Vui lòng thử lại.';
+      errorMessage = 'Không thể tải điểm danh. Lỗi: $e';
     }
 
     isLoading = false;
@@ -226,8 +224,8 @@ class OrganizerService extends ChangeNotifier {
         body: {'qr_token': qrToken},
         authenticated: true,
       );
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      return decoded;
+      final decoded = jsonDecode(response.body);
+      return decoded is Map<String, dynamic> ? decoded : {'success': false, 'message': 'Dữ liệu không hợp lệ'};
     } catch (e) {
       return {'success': false, 'message': 'Lỗi kết nối: $e'};
     }
@@ -235,7 +233,7 @@ class OrganizerService extends ChangeNotifier {
 
   // ─── Manual Check-in ──────────────────────────────────────────────────────
 
-  Future<bool> manualCheckIn(int eventId, String studentCode) async {
+  Future<bool> manualCheckIn(dynamic eventId, String studentCode) async {
     isLoading = true;
     errorMessage = null;
     notifyListeners();
@@ -246,9 +244,9 @@ class OrganizerService extends ChangeNotifier {
         body: {'event_id': eventId, 'student_code': studentCode},
         authenticated: true,
       );
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final decoded = jsonDecode(response.body);
 
-      if (response.statusCode == 200 && decoded['success'] == true) {
+      if (response.statusCode == 200 && decoded is Map && decoded['success'] == true) {
         final alreadyCheckedIn = decoded['data']?['already_checked_in'] == true;
         if (alreadyCheckedIn) {
           errorMessage = 'Sinh viên này đã điểm danh trước đó';
@@ -256,14 +254,13 @@ class OrganizerService extends ChangeNotifier {
           notifyListeners();
           return false;
         }
-        // Refresh attendance list
         await fetchAttendanceForEvent(eventId);
         return true;
       } else {
-        errorMessage = decoded['message'] as String? ?? 'Lỗi điểm danh thủ công';
+        errorMessage = decoded is Map ? decoded['message'] : 'Lỗi điểm danh thủ công';
       }
     } catch (e) {
-      errorMessage = 'Không thể điểm danh thủ công. Vui lòng thử lại.';
+      errorMessage = 'Không thể điểm danh thủ công. Lỗi: $e';
     }
 
     isLoading = false;
@@ -274,17 +271,9 @@ class OrganizerService extends ChangeNotifier {
   // ─── Dashboard Summary ────────────────────────────────────────────────────
 
   int get totalEvents => myEvents.length;
-
-  int get upcomingEvents =>
-      myEvents.where((e) => e.startTime.isAfter(DateTime.now())).length;
-
-  int get totalRegistered =>
-      myEvents.fold(0, (sum, e) => sum + (e.registeredCount ?? 0));
-
-  int get totalCheckedIn =>
-      myEvents.fold(0, (sum, e) => sum + (e.checkedInCount ?? 0));
-
-  // ─── Attendance helpers ───────────────────────────────────────────────────
+  int get upcomingEvents => myEvents.where((e) => e.startTime.isAfter(DateTime.now())).length;
+  int get totalRegistered => myEvents.fold(0, (sum, e) => sum + (e.registeredCount ?? 0));
+  int get totalCheckedIn => myEvents.fold(0, (sum, e) => sum + (e.checkedInCount ?? 0));
 
   void clearData() {
     myEvents = [];

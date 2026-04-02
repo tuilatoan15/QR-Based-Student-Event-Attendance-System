@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
   Users,
   UserCheck,
+  MessageSquare,
 } from 'lucide-react';
 
 type NavItem = {
@@ -30,6 +31,7 @@ const Sidebar: React.FC = () => {
     ...((user?.role === 'admin' || !user?.role) ? [
       { to: '/users', label: 'Users', icon: <Users size={18} /> },
       { to: '/organizers', label: 'Organizers', icon: <UserCheck size={18} /> },
+      { to: '/reports', label: 'Phản hồi', icon: <MessageSquare size={18} /> },
     ] : []),
     ...(user?.role === 'organizer' ? [
       { to: '/profile', label: 'My Organization', icon: <UserCheck size={18} /> },

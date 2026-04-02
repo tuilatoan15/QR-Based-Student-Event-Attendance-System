@@ -5,6 +5,8 @@ import '../../services/organizer_service.dart';
 import '../../models/event.dart';
 import '../../models/participant.dart';
 import '../../utils/string_utils.dart';
+import '../../config/api_config.dart';
+import '../../utils/image_helper.dart';
 
 class OrganizerAttendanceScreen extends StatefulWidget {
   const OrganizerAttendanceScreen({super.key});
@@ -351,14 +353,19 @@ class _ParticipantCard extends StatelessWidget {
           CircleAvatar(
             radius: 22,
             backgroundColor: checkedIn ? const Color(0xFFF0FDF4) : const Color(0xFFF1F5F9),
-            child: Text(
-              participant.fullName.isNotEmpty ? participant.fullName[0].toUpperCase() : '?',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 16,
-                color: checkedIn ? const Color(0xFF16A34A) : const Color(0xFF64748B),
-              ),
+            backgroundImage: ImageHelper.getAvatarProvider(
+               participant.avatar != null ? ApiConfig.resolveMediaUrl(participant.avatar!) : null
             ),
+            child: (participant.avatar == null || participant.avatar!.isEmpty)
+              ? Text(
+                  participant.fullName.isNotEmpty ? participant.fullName[0].toUpperCase() : '?',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                    color: checkedIn ? const Color(0xFF16A34A) : const Color(0xFF64748B),
+                  ),
+                )
+              : null,
           ),
           const SizedBox(width: 12),
 

@@ -45,6 +45,11 @@ const AdminLayout: React.FC = () => {
         to: '/organizers',
         label: 'Duyệt Org',
         icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} width={18} height={18}><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>,
+      },
+      {
+        to: '/reports',
+        label: 'Phản hồi',
+        icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} width={18} height={18}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
       }
     ] : []),
     ...(user?.role === 'organizer' ? [
@@ -69,8 +74,6 @@ const AdminLayout: React.FC = () => {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
         .al-root *{box-sizing:border-box;}
         .al-root{
           display:flex;min-height:100vh;
@@ -160,8 +163,9 @@ const AdminLayout: React.FC = () => {
           background:linear-gradient(135deg,#38bdf8,#0284c7);
           color:#fff;font-size:11px;font-weight:700;
           display:flex;align-items:center;justify-content:center;
-          letter-spacing:.5px;
+          letter-spacing:.5px;overflow:hidden;
         }
+        .al-avatar img{width:100%;height:100%;object-fit:cover;}
         .al-user-name{
           font-size:12.5px;font-weight:600;color:#0f172a;
           white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
@@ -209,7 +213,9 @@ const AdminLayout: React.FC = () => {
           background:linear-gradient(135deg,#38bdf8,#0284c7);
           color:#fff;font-size:10.5px;font-weight:700;
           display:flex;align-items:center;justify-content:center;
+          overflow:hidden;
         }
+        .al-topbar-av img{width:100%;height:100%;object-fit:cover;}
         .al-topbar-name{
           font-size:13px;font-weight:500;color:#374151;
           max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
@@ -259,7 +265,9 @@ const AdminLayout: React.FC = () => {
           <div className="al-footer">
             {!collapsed && (
               <div className="al-user">
-                <div className="al-avatar">{initials}</div>
+                <div className="al-avatar" style={user?.avatar ? { background: 'none' } : {}}>
+                  {user?.avatar ? <img src={user.avatar} alt="AV" /> : initials}
+                </div>
                 <div style={{flex:1,minWidth:0}}>
                   <div className="al-user-name">{user?.full_name ?? 'Admin'}</div>
                   <div className="al-user-role">{user?.role ?? 'admin'}</div>
@@ -287,7 +295,9 @@ const AdminLayout: React.FC = () => {
                 Hệ thống hoạt động
               </div>
               <div className="al-topbar-user">
-                <div className="al-topbar-av">{initials}</div>
+                <div className="al-topbar-av" style={user?.avatar ? { background: 'none' } : {}}>
+                  {user?.avatar ? <img src={user.avatar} alt="AV" /> : initials}
+                </div>
                 <span className="al-topbar-name">{user?.full_name ?? 'Admin'}</span>
               </div>
             </div>

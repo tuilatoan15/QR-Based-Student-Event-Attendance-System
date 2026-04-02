@@ -14,18 +14,18 @@ const AttendancePage: React.FC = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [records, setRecords] = useState<AttendanceListRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [eventId, setEventId] = useState<number | 'all'>('all');
+  const [eventId, setEventId] = useState<string | 'all'>('all');
   const [search, setSearch] = useState('');
   // Manual check-in by student code
   const [manualStudentCode, setManualStudentCode] = useState('');
-  const [manualEventId, setManualEventId] = useState<number | ''>('');
+  const [manualEventId, setManualEventId] = useState<string>('');
   const [manualResult, setManualResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [manualLoading, setManualLoading] = useState(false);
   const [scanResults, setScanResults] = useState<ScanResult[]>([]);
   const [scanning, setScanning] = useState(false);
   const [processingScan, setProcessingScan] = useState(false);
 
-  const reload = async (eid: number | 'all' = eventId, q: string = search) => {
+  const reload = async (eid: string | 'all' = eventId, q: string = search) => {
     setLoading(true);
     try {
       const res = await attendanceApi.listAttendance({
@@ -80,7 +80,7 @@ const AttendancePage: React.FC = () => {
     setManualLoading(true);
     setManualResult(null);
     try {
-      const res = await attendanceApi.manualCheckinByStudent(code, Number(eid));
+      const res = await attendanceApi.manualCheckinByStudent(code, eid);
       const data = res.data?.data;
       const alreadyDone = data?.already_checked_in === true;
       const studentName = data?.student_name || '';
@@ -107,13 +107,13 @@ const AttendancePage: React.FC = () => {
       notifySuccess(displayMsg);
       await reload(eventId, search);
     } catch (err: any) {
-      const m = err?.response?.data?.message || 'Check-in thất bại';
+      const m = err?.response?.data?.message || 'Điểm danh thất bại';
       setManualResult({ ok: false, msg: '✗ ' + m });
     } finally { setManualLoading(false); }
   };
 
   const onExportCsv = () => {
-    const header = ['Tên sinh viên', 'Email', 'Mã SV', 'Sự kiện', 'Giờ check-in'];
+    const header = ['Tên sinh viên', 'Email', 'Mã SV', 'Sự kiện', 'Giờ điểm danh'];
     const rows = filtered.map((r) => {
       const time = r.check_in_time || (r as any).checkin_time || (r as any).checkInTime || (r as any).CHECK_IN_TIME || (r.registration_status === 'attended' ? r.registered_at : null);
       return [r.student_name, r.email, r.student_code ?? '', r.event_title, time ? new Date(time).toLocaleString('vi-VN') : ''];
@@ -122,7 +122,7 @@ const AttendancePage: React.FC = () => {
   };
 
   const onExportXlsx = () => {
-    const header = ['Tên sinh viên', 'Email', 'Mã SV', 'Sự kiện', 'Giờ check-in'];
+    const header = ['Tên sinh viên', 'Email', 'Mã SV', 'Sự kiện', 'Giờ điểm danh'];
     const rows = filtered.map((r) => {
       const time = r.check_in_time || (r as any).checkin_time || (r as any).checkInTime || (r as any).CHECK_IN_TIME || (r.registration_status === 'attended' ? r.registered_at : null);
       return [r.student_name, r.email, r.student_code ?? '', r.event_title, time ? new Date(time).toLocaleString('vi-VN') : ''];
@@ -144,7 +144,7 @@ const AttendancePage: React.FC = () => {
         return;
       }
 
-      let displayMsg = res.data?.message || 'Check-in thành công';
+      let displayMsg = res.data?.message || 'Điểm danh thành công';
 
       if (studentName) {
         displayMsg = `${studentName}: ${displayMsg}`;
@@ -157,7 +157,7 @@ const AttendancePage: React.FC = () => {
       notifySuccess(displayMsg);
       await reload(eventId, search);
     } catch (err: any) {
-      const msg = err?.response?.data?.message || 'Check-in thất bại. Kiểm tra lại mã QR.';
+      const msg = err?.response?.data?.message || 'Điểm danh thất bại. Kiểm tra lại mã QR.';
       setScanResults(prev => [{ at: new Date().toISOString(), ok: false, message: msg }, ...prev].slice(0, 8));
     } finally { setProcessingScan(false); }
   };
@@ -267,7 +267,7 @@ const AttendancePage: React.FC = () => {
                    {eventId !== 'all' && (
                     <>
                       <span className="att-count-attended">
-                        ✓ {filtered.filter(r => r.registration_status === 'attended').length} đã check-in
+                        ✓ {filtered.filter(r => r.registration_status === 'attended').length} đã điểm danh
                       </span>
                       <span className="att-count-attended" style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fee2e2', marginLeft: 6 }}>
                         ✕ {filtered.filter(r => r.registration_status === 'cancelled').length} đã hủy
@@ -279,7 +279,7 @@ const AttendancePage: React.FC = () => {
               <div className="att-card-body">
                 <div className="att-filters">
                   <select className="att-select" value={eventId} onChange={e => {
-                    setEventId(e.target.value === 'all' ? 'all' : Number(e.target.value));
+                    setEventId(e.target.value === 'all' ? 'all' : e.target.value);
                   }}>
                     <option value="all">Tất cả sự kiện (chỉ checked-in)</option>
                     {events.map(ev => <option key={ev.id} value={ev.id}>{ev.title}</option>)}
@@ -297,7 +297,7 @@ const AttendancePage: React.FC = () => {
                   <thead><tr>
                     <th>Sinh viên</th>
                     <th>Sự kiện</th>
-                    <th>Giờ check-in</th>
+                    <th>Giờ điểm danh</th>
                     <th>Trạng thái</th>
                   </tr></thead>
                   <tbody>
@@ -321,7 +321,7 @@ const AttendancePage: React.FC = () => {
                         </td>
                         <td>
                            <span className={`att-badge ${r.registration_status === 'cancelled' ? 'att-badge-cancelled' : r.registration_status === 'attended' ? 'att-badge-attended' : 'att-badge-reg'}`}>
-                            {r.registration_status === 'cancelled' ? '✕ Đã hủy' : r.registration_status === 'attended' ? '✓ Đã check-in' : '○ Chưa check-in'}
+                            {r.registration_status === 'cancelled' ? '✕ Đã hủy' : r.registration_status === 'attended' ? '✓ Đã điểm danh' : '○ Chưa điểm danh'}
                           </span>
                         </td>
                       </tr>
@@ -357,7 +357,7 @@ const AttendancePage: React.FC = () => {
                     className="att-select"
                     style={{ width: '100%' }}
                     value={manualEventId}
-                    onChange={e => setManualEventId(e.target.value === '' ? '' : Number(e.target.value))}
+                    onChange={e => setManualEventId(e.target.value)}
                   >
                     <option value="">-- Chọn sự kiện --</option>
                     {events.map(ev => <option key={ev.id} value={ev.id}>{ev.title}</option>)}

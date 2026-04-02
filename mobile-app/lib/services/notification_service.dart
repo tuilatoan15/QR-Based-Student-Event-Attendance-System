@@ -140,42 +140,40 @@ class NotificationService extends ChangeNotifier {
     required bool primeExisting,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    final maxId = notifList.fold<int>(
-      0,
-      (current, item) => item.id > current ? item.id : current,
-    );
-    final lastDeliveredId =
+    final maxId = notifList.length; // Dùng độ dài danh sách để đơn giản hóa maxId
+    final lastDeliveredCount =
         prefs.getInt(_lastLocalCheckinNotificationIdKey) ?? 0;
 
     if (primeExisting) {
-      if (maxId > 0) {
-        await prefs.setInt(_lastLocalCheckinNotificationIdKey, maxId);
-      }
+      await prefs.setInt(_lastLocalCheckinNotificationIdKey, notifList.length);
       return;
     }
 
     if (!_notifyAttendanceUpdates) {
-      if (maxId > lastDeliveredId) {
-        await prefs.setInt(_lastLocalCheckinNotificationIdKey, maxId);
+      if (notifList.length > lastDeliveredCount) {
+        await prefs.setInt(_lastLocalCheckinNotificationIdKey, notifList.length);
       }
       return;
     }
 
-    final newCheckins = notifList
-        .where((n) => n.id > lastDeliveredId && n.type == 'checkin')
+    // Lấy các thông báo quan trọng mới nhất chưa hiển thị
+    final importantTypes = ['checkin', 'registration', 'cancellation'];
+    final newSignals = notifList
+        .where((n) => importantTypes.contains(n.type))
         .toList()
-      ..sort((a, b) => a.id.compareTo(b.id));
-
-    for (final notification in newCheckins) {
-      await _showLocalNotification(
-        id: notification.id,
-        title: 'Điểm danh thành công',
-        body: notification.message,
-      );
-    }
-
-    if (maxId > lastDeliveredId) {
-      await prefs.setInt(_lastLocalCheckinNotificationIdKey, maxId);
+        .reversed
+        .toList();
+    
+    if (newSignals.length > lastDeliveredCount) {
+      for (int i = lastDeliveredCount; i < newSignals.length; i++) {
+        final notification = newSignals[i];
+        await _showLocalNotification(
+          id: notification.id.hashCode,
+          title: notification.title.isNotEmpty ? notification.title : 'Thông báo mới',
+          body: notification.message,
+        );
+      }
+      await prefs.setInt(_lastLocalCheckinNotificationIdKey, newSignals.length);
     }
   }
 
@@ -227,8 +225,9 @@ class NotificationService extends ChangeNotifier {
         }
 
         if (key != null && !sentKeys.contains(key)) {
+          // Sử dụng hashCode để tạo ID thông báo duy nhất từ String ID
           await _showLocalNotification(
-            id: event.id * 10 + (minutesLeft <= 60 ? 1 : 2),
+            id: event.id.hashCode + (minutesLeft <= 60 ? 1 : 2),
             title: title!,
             body: body!,
           );
@@ -265,7 +264,7 @@ class NotificationService extends ChangeNotifier {
     await _localNotifications.show(id, title, body, details);
   }
 
-  Future<void> markAsRead(int notificationId) async {
+  Future<void> markAsRead(String notificationId) async {
     try {
       final token = await _readToken();
       if (token == null) return;

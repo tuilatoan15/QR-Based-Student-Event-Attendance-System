@@ -129,7 +129,7 @@ const LoginPage: React.FC = () => {
             <div className="lp-left-logo">
               <img src="/assets/logo/logo2.png" alt="University Logo 2" />
             </div>
-            <h2 className="lp-left-title">QR Event<br />Attendance System</h2>
+            <h2 className="lp-left-title">Hệ thống Điểm danh<br />Sự kiện qua mã QR</h2>
             <div className="lp-feat-list">
               {features.map((f, i) => (
                 <div key={i} className="lp-feat-item">

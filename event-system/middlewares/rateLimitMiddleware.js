@@ -5,7 +5,7 @@ const authLimiter = rateLimit({
   max: 10,
   message: {
     success: false,
-    message: 'Too many attempts, please try again later'
+    message: 'Quá nhiều lần thử, vui lòng thử lại sau'
   },
   standardHeaders: true,
   legacyHeaders: false
@@ -16,7 +16,7 @@ const apiLimiter = rateLimit({
   max: 100,
   message: {
     success: false,
-    message: 'Too many requests, please try again later'
+    message: 'Quá nhiều yêu cầu, vui lòng thử lại sau'
   },
   standardHeaders: true,
   legacyHeaders: false

@@ -22,14 +22,8 @@ class ApiService {
 
   /// Check if endpoint requires authentication
   bool _isProtectedEndpoint(String path) {
-    // Endpoints that require authentication
-    final protectedPatterns = [
-      '/api/events/', // includes POST, DELETE /:id/register
-      '/api/users/me/', // user-specific endpoints
-      '/api/attendance/', // attendance endpoints
-    ];
-
-    return protectedPatterns.any((pattern) => path.contains(pattern));
+    if (path.contains('/api/auth/')) return false;
+    return path.contains('/api/');
   }
 
   Future<http.Response> post(
@@ -55,7 +49,7 @@ class ApiService {
 
     return http
         .post(uri, headers: headers, body: jsonEncode(body ?? {}))
-        .timeout(const Duration(seconds: 10));
+        .timeout(const Duration(seconds: 20));
   }
 
   Future<http.Response> put(
@@ -81,7 +75,7 @@ class ApiService {
 
     return http
         .put(uri, headers: headers, body: jsonEncode(body ?? {}))
-        .timeout(const Duration(seconds: 10));
+        .timeout(const Duration(seconds: 20));
   }
 
   Future<http.Response> patch(
@@ -106,7 +100,7 @@ class ApiService {
 
     return http
         .patch(uri, headers: headers, body: jsonEncode(body ?? {}))
-        .timeout(const Duration(seconds: 10));
+        .timeout(const Duration(seconds: 20));
   }
 
   Future<http.Response> get(
@@ -129,7 +123,7 @@ class ApiService {
       }
     }
 
-    return http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
+    return http.get(uri, headers: headers).timeout(const Duration(seconds: 20));
   }
 
   Future<http.Response> delete(
@@ -154,7 +148,7 @@ class ApiService {
 
     return http
         .delete(uri, headers: headers)
-        .timeout(const Duration(seconds: 10));
+        .timeout(const Duration(seconds: 20));
   }
 
   Future<http.Response> postMultipart(

@@ -15,7 +15,7 @@ const EditEventPage: React.FC = () => {
       if (!id) return;
       setLoading(true); setError(null);
       try {
-        const res = await eventApi.getEvent(Number(id));
+        const res = await eventApi.getEvent(id);
         setEvent((res.data.data ?? res.data) as Event);
       } catch (err: any) {
         setError(err?.response?.data?.message || 'Không thể tải thông tin sự kiện.');
@@ -26,7 +26,7 @@ const EditEventPage: React.FC = () => {
 
   const handleSubmit: React.ComponentProps<typeof EventForm>['onSubmit'] = async (values) => {
     if (!id) return;
-    await eventApi.updateEvent(Number(id), values as any);
+    await eventApi.updateEvent(id, values as any);
     navigate('/events');
   };
 

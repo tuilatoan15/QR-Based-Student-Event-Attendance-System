@@ -1,7 +1,7 @@
 import axiosClient from './axiosClient';
 
 export type AdminUser = {
-  id: number;
+  id: string;
   full_name: string;
   email: string;
   student_code?: string | null;
@@ -17,11 +17,11 @@ export const usersApi = {
     return axiosClient.get('/users', { params });
   },
 
-  updateRole(userId: number, role: string) {
+  updateRole(userId: string, role: string) {
     return axiosClient.patch(`/users/${userId}/role`, { role });
   },
 
-  setActive(userId: number, is_active: boolean) {
+  setActive(userId: string, is_active: boolean) {
     return axiosClient.patch(`/users/${userId}/active`, { is_active });
   },
 
@@ -31,6 +31,15 @@ export const usersApi = {
 
   updateOrganizerProfile(data: any) {
     return axiosClient.patch('/users/me/organizer-profile', data);
-  }
-};
+  },
 
+  updateAvatar(formData: FormData) {
+    return axiosClient.post('/users/me/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  changePassword(data: any) {
+    return axiosClient.patch('/users/me/password', data);
+  },
+};

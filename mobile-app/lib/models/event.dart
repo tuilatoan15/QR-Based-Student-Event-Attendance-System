@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 class Event {
-  final int id;
+  final String id;
   final String title;
   final String? description;
   final List<String> images;
@@ -33,22 +33,28 @@ class Event {
 
   factory Event.fromJson(Map<String, dynamic> json) {
     List<String> parsedImages = [];
-    if (json['images'] != null && json['images'] is String) {
-      try {
-        final List<dynamic> decoded = jsonDecode(json['images']);
-        parsedImages = decoded.map((e) => e.toString()).toList();
-      } catch (e) {
-        // ignored
+    if (json['images'] != null) {
+      if (json['images'] is List) {
+        parsedImages = (json['images'] as List).map((e) => e.toString()).toList();
+      } else if (json['images'] is String) {
+        try {
+          final dynamic decoded = jsonDecode(json['images'] as String);
+          if (decoded is List) {
+            parsedImages = decoded.map((e) => e.toString()).toList();
+          }
+        } catch (e) {
+          // ignored
+        }
       }
     }
     
     return Event(
-      id: json['id'] as int,
+      id: json['id']?.toString() ?? json['_id']?.toString() ?? '',
       title: json['title'] as String? ?? '',
       description: json['description'] as String?,
       location: json['location'] as String? ?? '',
-      startTime: DateTime.parse(json['start_time'] as String),
-      endTime: DateTime.parse(json['end_time'] as String),
+      startTime: DateTime.tryParse(json['start_time'] as String? ?? '') ?? DateTime.now(),
+      endTime: DateTime.tryParse(json['end_time'] as String? ?? '') ?? DateTime.now(),
       maxParticipants: json['max_participants'] as int? ?? 0,
       registeredCount: json['registered_count'] as int?,
       checkedInCount: json['checked_in_count'] as int?,

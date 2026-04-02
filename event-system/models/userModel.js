@@ -1,174 +1,94 @@
-const { sql, poolPromise } = require('../config/db');
+const { mongoose } = require('../config/db');
 
-const createUser = async ({ full_name, email, password_hash, role_id, student_code }) => {
-  const pool = await poolPromise;
-  const result = await pool
-    .request()
-    .input('full_name', sql.NVarChar(255), full_name)
-    .input('email', sql.NVarChar(255), email)
-    .input('password_hash', sql.NVarChar(255), password_hash)
-    .input('role_id', sql.Int, role_id)
-    .input('student_code', sql.NVarChar(50), student_code || null)
-    .query(
-      `INSERT INTO users (full_name, email, password_hash, student_code, role_id, is_active, created_at, updated_at)
-       VALUES (@full_name, @email, @password_hash, @student_code, @role_id, 1, SYSUTCDATETIME(), SYSUTCDATETIME());
-       SELECT SCOPE_IDENTITY() AS id;`
-    );
-  const id = result.recordset[0].id;
-  return { id, full_name, email, role_id };
-};
+const organizerProfileSchema = new mongoose.Schema(
+  {
+    organization_name: {
+      type: String,
+      trim: true,
+    },
+    position: {
+      type: String,
+      trim: true,
+    },
+    phone: {
+      type: String,
+      trim: true,
+    },
+    bio: {
+      type: String,
+      trim: true,
+    },
+    website: {
+      type: String,
+      trim: true,
+    },
+  },
+  { _id: false }
+);
 
-const findUserByEmail = async (email) => {
-  const pool = await poolPromise;
-  const result = await pool
-    .request()
-    .input('email', sql.NVarChar(255), email)
-    .query(
-      `SELECT u.*, r.name AS role_name
-       FROM users u
-       JOIN roles r ON u.role_id = r.id
-       WHERE u.email = @email`
-    );
-  return result.recordset[0] || null;
-};
-
-const findUserById = async (id) => {
-  const pool = await poolPromise;
-  const result = await pool
-    .request()
-    .input('id', sql.Int, id)
-    .query(
-      `SELECT u.*, r.name AS role_name
-       FROM users u
-       JOIN roles r ON u.role_id = r.id
-       WHERE u.id = @id`
-    );
-  return result.recordset[0] || null;
-};
-
-const getRoleIdByName = async (name) => {
-  const pool = await poolPromise;
-  const result = await pool
-    .request()
-    .input('name', sql.NVarChar(50), name)
-    .query('SELECT id FROM roles WHERE name = @name');
-  return result.recordset[0] ? result.recordset[0].id : null;
-};
-
-const listUsers = async ({ offset = 0, limit = 50, search = '' } = {}) => {
-  const pool = await poolPromise;
-  const term = (search || '').trim();
-
-  const request = pool
-    .request()
-    .input('offset', sql.Int, offset)
-    .input('limit', sql.Int, limit);
-
-  let whereSql = 'WHERE (oi.approval_status IS NULL OR oi.approval_status = \'approved\')';
-  if (term) {
-    request.input('search', sql.NVarChar(255), `%${term}%`);
-    whereSql += ' AND (u.full_name LIKE @search OR u.email LIKE @search OR u.student_code LIKE @search)';
+const userSchema = new mongoose.Schema(
+  {
+    legacy_sql_id: {
+      type: Number,
+      index: true,
+      default: null,
+    },
+    full_name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
+    password_hash: {
+      type: String,
+      required: true,
+      select: false,
+    },
+    student_code: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    role: {
+      type: String,
+      enum: ['admin', 'organizer', 'student'],
+      default: 'student',
+    },
+    is_active: {
+      type: Boolean,
+      default: true,
+    },
+    avatar: {
+      type: String,
+      trim: true,
+      default: 'https://res.cloudinary.com/dhw5zmh91/image/upload/v1/zqabiday4fmm0exkauot',
+    },
+    organizer_profile: {
+      type: organizerProfileSchema,
+      default: null,
+    },
+  },
+  {
+    timestamps: true,
+    versionKey: false,
   }
+);
 
-  const result = await request.query(
-    `SELECT u.id, u.full_name, u.email, u.avatar, u.student_code, u.is_active, u.created_at, u.updated_at,
-            r.name AS role_name
-     FROM users u
-     JOIN roles r ON u.role_id = r.id
-     LEFT JOIN organizer_info oi ON u.id = oi.user_id
-     ${whereSql}
-     ORDER BY u.created_at DESC
-     OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`
-  );
-  return result.recordset;
-};
+userSchema.index({ student_code: 1 }, { sparse: true });
 
-const countUsers = async ({ search = '' } = {}) => {
-  const pool = await poolPromise;
-  const term = (search || '').trim();
-  const request = pool.request();
-  let whereSql = 'WHERE (oi.approval_status IS NULL OR oi.approval_status = \'approved\')';
-  if (term) {
-    request.input('search', sql.NVarChar(255), `%${term}%`);
-    whereSql += ' AND (u.full_name LIKE @search OR u.email LIKE @search OR u.student_code LIKE @search)';
-  }
+userSchema.set('toJSON', {
+  transform: (_doc, ret) => {
+    ret.id = ret._id.toString();
+    delete ret._id;
+    delete ret.password_hash;
+    return ret;
+  },
+});
 
-  const result = await request.query(
-    `SELECT COUNT(1) AS total
-     FROM users u
-     LEFT JOIN organizer_info oi ON u.id = oi.user_id
-     ${whereSql}`
-  );
-  return result.recordset[0]?.total ?? 0;
-};
-
-const setUserRoleByName = async (userId, roleName) => {
-  const pool = await poolPromise;
-  const roleId = await getRoleIdByName(roleName);
-  if (!roleId) return false;
-
-  await pool
-    .request()
-    .input('id', sql.Int, userId)
-    .input('role_id', sql.Int, roleId)
-    .query('UPDATE users SET role_id = @role_id, updated_at = SYSUTCDATETIME() WHERE id = @id');
-  return true;
-};
-
-const setUserActive = async (userId, isActive) => {
-  const pool = await poolPromise;
-  await pool
-    .request()
-    .input('id', sql.Int, userId)
-    .input('is_active', sql.Bit, isActive ? 1 : 0)
-    .query('UPDATE users SET is_active = @is_active, updated_at = SYSUTCDATETIME() WHERE id = @id');
-};
-
-const updateUserPassword = async (userId, newPasswordHash) => {
-  const pool = await poolPromise;
-  await pool
-    .request()
-    .input('id', sql.Int, userId)
-    .input('password_hash', sql.NVarChar(255), newPasswordHash)
-    .query('UPDATE users SET password_hash = @password_hash, updated_at = SYSUTCDATETIME() WHERE id = @id');
-  return true;
-};
-
-const getOrganizerInfoByUserId = async (userId) => {
-  const pool = await poolPromise;
-  const result = await pool
-    .request()
-    .input('user_id', sql.Int, userId)
-    .query('SELECT * FROM organizer_info WHERE user_id = @user_id');
-  return result.recordset[0] || null;
-};
-
-const createOrganizerInfo = async ({ user_id, organization_name, position, phone, bio, website }) => {
-  const pool = await poolPromise;
-  await pool
-    .request()
-    .input('user_id', sql.Int, user_id)
-    .input('organization_name', sql.NVarChar(255), organization_name)
-    .input('position', sql.NVarChar(255), position || null)
-    .input('phone', sql.VarChar(20), phone || null)
-    .input('bio', sql.NVarChar(sql.MAX), bio || null)
-    .input('website', sql.NVarChar(255), website || null)
-    .query(`
-      INSERT INTO organizer_info (user_id, organization_name, position, phone, bio, website, approval_status)
-      VALUES (@user_id, @organization_name, @position, @phone, @bio, @website, 'pending')
-    `);
-};
-
-module.exports = {
-  createUser,
-  findUserByEmail,
-  findUserById,
-  getRoleIdByName,
-  listUsers,
-  countUsers,
-  setUserRoleByName,
-  setUserActive,
-  updateUserPassword,
-  getOrganizerInfoByUserId,
-  createOrganizerInfo
-};
+module.exports = mongoose.models.User || mongoose.model('User', userSchema);

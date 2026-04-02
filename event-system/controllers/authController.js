@@ -1,85 +1,104 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
-const dotenv = require('dotenv');
-
-const {
-  createUser,
-  findUserByEmail,
-  getRoleIdByName,
-  getOrganizerInfoByUserId,
-  createOrganizerInfo,
-  updateUserPassword,
-} = require('../models/userModel');
+const User = require('../models/userModel');
 const { successResponse, errorResponse } = require('../utils/response');
 const { logAuthAttempt } = require('../utils/logger');
-
-dotenv.config();
+const { nextLegacySqlId } = require('../utils/legacySequence');
+const sendEmail = require('../utils/email');
+const crypto = require('crypto');
+const { getPublicId } = require('../utils/clientFormat');
 
 const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS || '10', 10);
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1d';
-const MAIL_USER = process.env.MAIL_USER || '';
-const MAIL_PASS = process.env.MAIL_PASS || '';
 
-const generateToken = (user) => {
-  return jwt.sign(
-    { id: user.id, email: user.email, role: user.role_name || user.role },
+const buildToken = (user) =>
+  jwt.sign(
+    {
+      id: user._id.toString(),
+      email: user.email,
+      role: user.role,
+    },
     process.env.JWT_SECRET,
     { expiresIn: JWT_EXPIRES_IN }
   );
-};
 
-const generateRandomPassword = (length = 12) => {
-  const chars =
-    'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
-  return Array.from(
-    { length },
-    () => chars[Math.floor(Math.random() * chars.length)]
-  ).join('');
+const serializeUser = (user) => ({
+  id: user.legacy_sql_id ?? user._id.toString(),
+  full_name: user.full_name,
+  email: user.email,
+  student_code: user.student_code,
+  role: user.role,
+  avatar: user.avatar || null,
+  organizer_profile: user.organizer_profile || null,
+  created_at: user.createdAt,
+  updated_at: user.updatedAt,
+});
+
+const syncOrganizerInfo = async (db, user, profile, options = {}) => {
+  if (!db || !user) {
+    return;
+  }
+
+  const {
+    approval_status = 'pending',
+    reject_reason = null,
+    approved_by = null,
+  } = options;
+
+  await db.collection('organizer_infos').updateOne(
+    { user_id: user._id },
+    {
+      $set: {
+        full_name: user.full_name,
+        email: user.email,
+        organization_name: profile.organization_name || null,
+        position: profile.position || null,
+        phone: profile.phone || null,
+        bio: profile.bio || null,
+        website: profile.website || null,
+        approval_status,
+        reject_reason,
+        approved_by,
+        updated_at: new Date(),
+      },
+      $setOnInsert: {
+        created_at: new Date(),
+      },
+    },
+    { upsert: true }
+  );
 };
 
 const register = async (req, res, next) => {
   try {
     const { full_name, email, password, student_code } = req.body;
 
-    if (!full_name || !email || !password) {
-      return errorResponse(res, 400, 'full_name, email and password are required');
-    }
-
-    const existing = await findUserByEmail(email);
-    if (existing) {
-      return errorResponse(res, 409, 'Email already registered');
-    }
-
-    const roleId = await getRoleIdByName('student');
-    if (!roleId) {
-      return errorResponse(res, 500, 'Default student role not configured');
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return errorResponse(res, 409, 'Email đã được đăng ký');
     }
 
     const password_hash = await bcrypt.hash(password, SALT_ROUNDS);
-    const newUser = await createUser({
+    const legacy_sql_id = await nextLegacySqlId(req.app.locals.db, 'users');
+    const user = await User.create({
+      legacy_sql_id,
       full_name,
-      email,
+      email: email.toLowerCase(),
       password_hash,
-      role_id: roleId,
       student_code: student_code || null,
+      role: 'student',
     });
 
-    const userWithRole = { ...newUser, role_name: 'student' };
-    const token = generateToken(userWithRole);
-
-    return successResponse(res, 201, 'User registered successfully', {
+    const token = buildToken(user);
+    return successResponse(res, 201, 'Đăng ký người dùng thành công', {
       user: {
-        id: newUser.id,
-        full_name,
-        email,
-        student_code: newUser.student_code || student_code,
-        role: 'student',
+        ...serializeUser(user),
+        id: getPublicId(user, req),
       },
       token,
     });
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    next(error);
   }
 };
 
@@ -96,57 +115,42 @@ const registerOrganizer = async (req, res, next) => {
       website,
     } = req.body;
 
-    if (!full_name || !email || !password || !organization_name) {
-      return errorResponse(
-        res,
-        400,
-        'full_name, email, password, and organization_name are required'
-      );
-    }
-
-    const existing = await findUserByEmail(email);
-    if (existing) {
-      const orgInfo = await getOrganizerInfoByUserId(existing.id);
-      if (orgInfo) {
-        return errorResponse(
-          res,
-          409,
-          'User is already registered as an organizer'
-        );
-      }
-      return errorResponse(res, 409, 'Email already registered');
-    }
-
-    const roleId = await getRoleIdByName('student');
-    if (!roleId) {
-      return errorResponse(res, 500, 'Default student role not configured');
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return errorResponse(res, 409, 'Email đã được đăng ký');
     }
 
     const password_hash = await bcrypt.hash(password, SALT_ROUNDS);
-    const newUser = await createUser({
-      full_name,
-      email,
-      password_hash,
-      role_id: roleId,
-      student_code: null,
-    });
-
-    await createOrganizerInfo({
-      user_id: newUser.id,
+    const legacy_sql_id = await nextLegacySqlId(req.app.locals.db, 'users');
+    const organizerProfile = {
       organization_name,
       position,
       phone,
       bio,
       website,
+    };
+
+    const user = await User.create({
+      legacy_sql_id,
+      full_name,
+      email: email.toLowerCase(),
+      password_hash,
+      role: 'organizer',
+      organizer_profile: organizerProfile,
     });
 
-    return successResponse(
-      res,
-      201,
-      'Dang ky thanh cong, vui long cho admin duyet tai khoan'
-    );
-  } catch (err) {
-    next(err);
+    await syncOrganizerInfo(req.app?.locals?.db, user, organizerProfile);
+
+    const token = buildToken(user);
+    return successResponse(res, 201, 'Đăng ký nhà tổ chức thành công', {
+      user: {
+        ...serializeUser(user),
+        id: getPublicId(user, req),
+      },
+      token,
+    });
+  } catch (error) {
+    next(error);
   }
 };
 
@@ -154,133 +158,131 @@ const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      return errorResponse(res, 400, 'email and password are required');
-    }
-
-    const user = await findUserByEmail(email);
+    const user = await User.findOne({ email: email.toLowerCase() }).select('+password_hash');
     if (!user) {
       logAuthAttempt(email, false);
-      return errorResponse(res, 401, 'Invalid credentials');
+      return errorResponse(res, 401, 'Thông tin đăng nhập không chính xác');
     }
 
     if (!user.is_active) {
       logAuthAttempt(email, false);
-      return errorResponse(res, 401, 'Account is inactive');
+      return errorResponse(res, 403, 'Tài khoản đã bị tạm khóa');
     }
 
-    const match = await bcrypt.compare(password, user.password_hash);
-    if (!match) {
+    const passwordMatches = await bcrypt.compare(password, user.password_hash);
+    if (!passwordMatches) {
       logAuthAttempt(email, false);
-      return errorResponse(res, 401, 'Invalid credentials');
+      return errorResponse(res, 401, 'Thông tin đăng nhập không chính xác');
     }
 
-    const orgInfo = await getOrganizerInfoByUserId(user.id);
-    if (orgInfo) {
-      if (orgInfo.approval_status === 'pending') {
+    if (user.role === 'organizer') {
+      const organizerInfo = await req.app.locals.db.collection('organizer_infos').findOne({ user_id: user._id });
+      if (!organizerInfo || organizerInfo.approval_status !== 'approved') {
+        const status = organizerInfo?.approval_status || 'pending';
         logAuthAttempt(email, false);
-        return errorResponse(
-          res,
-          403,
-          'Tai khoan cua ban chua duoc Admin phe duyet'
-        );
+        
+        if (status === 'rejected' || status === 'tu choi' || status === 'từ chối') {
+          return errorResponse(res, 403, 'Tài khoản đã bị từ chối phê duyệt. Lý do: ' + (organizerInfo?.reject_reason || 'Không có lý do cụ thể'));
+        }
+        
+        return errorResponse(res, 403, 'Tài khoản đang chờ phê duyệt. Vui lòng quay lại sau.');
       }
-      if (orgInfo.approval_status === 'rejected') {
-        logAuthAttempt(email, false);
-        return errorResponse(
-          res,
-          403,
-          `Tai khoan da bi tu choi: ${orgInfo.reject_reason || ''}`
-        );
-      }
-    }
-
-    const client = (req.headers['x-client'] || '').toString().toLowerCase();
-    const roleName = (user.role_name || '').toLowerCase();
-    if (client === 'mobile-app' && roleName === 'admin') {
-      logAuthAttempt(email, false);
-      return errorResponse(
-        res,
-        403,
-        'Admin must use the web admin dashboard.'
-      );
     }
 
     logAuthAttempt(email, true);
-    const token = generateToken(user);
 
-    return successResponse(res, 200, 'Login successful', {
+    const token = buildToken(user);
+
+    return successResponse(res, 200, 'Đăng nhập thành công', {
       user: {
-        id: user.id,
-        full_name: user.full_name,
-        email: user.email,
-        student_code: user.student_code,
-        role: user.role_name,
-        avatar: user.avatar || null,
+        ...serializeUser(user),
+        id: getPublicId(user, req),
       },
       token,
     });
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    next(error);
   }
 };
 
 const forgotPassword = async (req, res, next) => {
   try {
     const { email } = req.body;
-
     if (!email) {
-      return errorResponse(res, 400, 'email is required');
+      return errorResponse(res, 400, 'Yêu cầu cung cấp email');
     }
 
-    const user = await findUserByEmail(email);
+    const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
-      return errorResponse(res, 404, 'Email chua duoc dang ky');
-    }
-
-    const newPassword = generateRandomPassword();
-    const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
-    await updateUserPassword(user.id, passwordHash);
-
-    if (!MAIL_USER || !MAIL_PASS) {
-      return errorResponse(
+      // Vì lý do bảo mật, không trả ra 404 cho email không tồn tại.
+      // Chúng ta trả về thông báo thành công dù email có tồn tại hay không.
+      return successResponse(
         res,
-        500,
-        'Chua cau hinh MAIL_USER va MAIL_PASS trong file .env'
+        200,
+        'Nếu email tồn tại trong hệ thống, chúng tôi sẽ gửi hướng dẫn khôi phục mật khẩu vào đó'
       );
     }
 
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: MAIL_USER,
-        pass: MAIL_PASS,
-      },
-    });
+    // Tạo mật khẩu tạm thời
+    const temporaryPassword = crypto.randomBytes(4).toString('hex');
+    const password_hash = await bcrypt.hash(temporaryPassword, SALT_ROUNDS);
 
-    await transporter.sendMail({
-      from: `"EventPass Support" <${MAIL_USER}>`,
-      to: email,
-      subject: 'Cap lai mat khau EventPass',
-      text:
-        `Xin chao ${user.full_name},\n\n` +
-        `Mat khau moi cua ban la: ${newPassword}\n\n` +
-        'Vui long dang nhap lai va doi mat khau sau khi vao he thong.',
-    });
+    // Cập nhật người dùng
+    user.password_hash = password_hash;
+    await user.save();
+
+    // Gửi email
+    const message = `
+      Xin chào ${user.full_name},
+
+      Mật khẩu mới của bạn cho hệ thống EventPass đã được thay đổi thành: ${temporaryPassword}
+
+      Vui lòng đăng nhập bằng mật khẩu này và đổi mật khẩu mới ngay sau khi đăng nhập thành công để đảm bảo an toàn.
+
+      Trân trọng,
+      Đội ngũ EventPass.
+    `;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+        <h2 style="color: #00CCFF;">EventPass - Thông báo thay đổi mật khẩu</h2>
+        <p>Xin chào <strong>${user.full_name}</strong>,</p>
+        <p>Mật khẩu mới của bạn cho hệ thống <strong>EventPass</strong> đã được thay đổi thành:</p>
+        <div style="background-color: #f0f0f0; padding: 15px; border-radius: 4px; font-size: 20px; text-align: center; font-weight: bold; margin: 20px 0;">
+          ${temporaryPassword}
+        </div>
+        <p>Vui lòng đăng nhập bằng mật khẩu này và đổi mật khẩu mới ngay sau khi đăng nhập thành công để đảm bảo an toàn.</p>
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+        <p style="font-size: 12px; color: #777;">Đây là email tự động, vui lòng không trả lời.</p>
+      </div>
+    `;
+
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: '[EventPass] Mật khẩu mới được thiết lập',
+        message,
+        html,
+      });
+    } catch (err) {
+      console.error('Email sending failed in forgotPassword:', err);
+      // Nếu gửi email lỗi, vẫn nên thông báo thành công (người dùng không cần biết lỗi SMTP)
+      // nhưng có thể log lỗi vào database.
+    }
 
     return successResponse(
       res,
       200,
-      'Mat khau moi da duoc gui ve email dang ky'
+      'Mật khẩu mới đã được gửi vào địa chỉ email của bạn'
     );
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    next(error);
   }
 };
 
 module.exports = {
+  forgotPassword,
   register,
   registerOrganizer,
   login,
-  forgotPassword,
 };

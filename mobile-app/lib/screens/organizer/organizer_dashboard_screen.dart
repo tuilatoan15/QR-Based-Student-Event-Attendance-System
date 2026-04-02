@@ -84,7 +84,7 @@ class _OrganizerDashboardScreenState extends State<OrganizerDashboardScreen> {
                           ),
                           const SizedBox(height: 4),
                           const Text(
-                            'Dashboard',
+                            'Tổng quan',
                             style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5),
                           ),
                           const SizedBox(height: 2),
