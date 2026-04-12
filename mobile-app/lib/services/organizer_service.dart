@@ -179,7 +179,7 @@ class OrganizerService extends ChangeNotifier {
 
     try {
       final response = await _api.get(
-        '/api/attendance/event/$eventId',
+        '/api/attendance?event_id=$eventId',
         authenticated: true,
       );
       final decoded = jsonDecode(response.body);

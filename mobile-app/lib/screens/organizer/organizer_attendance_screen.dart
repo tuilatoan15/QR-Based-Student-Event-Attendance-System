@@ -19,7 +19,7 @@ class _OrganizerAttendanceScreenState extends State<OrganizerAttendanceScreen> {
   Event? _selectedEvent;
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchQuery = '';
-  String _filterStatus = 'all'; // 'all', 'checkedIn', 'notCheckedIn', 'cancelled'
+  String _filterStatus = 'all'; // 'all', 'registered', 'notCheckedIn', 'cancelled'
 
   @override
   void initState() {
@@ -85,13 +85,13 @@ class _OrganizerAttendanceScreenState extends State<OrganizerAttendanceScreen> {
     }).toList();
 
     // Calculate total counts based on search (regardless of status filter)
-    final checkedInCount = searched.where((p) => p.isCheckedIn).length;
+    final registeredCount = searched.where((p) => p.isCheckedIn).length;
     final cancelledCount = searched.where((p) => p.isCancelled).length;
     final notCheckedInCount = searched.where((p) => !p.isCheckedIn && !p.isCancelled).length;
 
     // 2. Status filter
     final filtered = searched.where((p) {
-      if (_filterStatus == 'checkedIn' && !p.isCheckedIn) return false;
+      if (_filterStatus == 'registered' && !p.isCheckedIn) return false;
       if (_filterStatus == 'notCheckedIn' && (p.isCheckedIn || p.isCancelled)) return false;
       if (_filterStatus == 'cancelled' && !p.isCancelled) return false;
       return true;
@@ -188,11 +188,11 @@ class _OrganizerAttendanceScreenState extends State<OrganizerAttendanceScreen> {
                     ),
                     const SizedBox(width: 8),
                     _StatBadge(
-                      label: 'Đã check-in', 
-                      count: checkedInCount, 
+                      label: 'Đã đăng ký', 
+                      count: registeredCount, 
                       color: const Color(0xFF16A34A),
-                      isSelected: _filterStatus == 'checkedIn',
-                      onTap: () => setState(() => _filterStatus = 'checkedIn'),
+                      isSelected: _filterStatus == 'registered',
+                      onTap: () => setState(() => _filterStatus = 'registered'),
                     ),
                     const SizedBox(width: 8),
                     _StatBadge(
@@ -411,7 +411,7 @@ class _ParticipantCard extends StatelessWidget {
                 ],
               ),
             )
-          else if (!checkedIn && participant.studentCode != null && participant.studentCode!.isNotEmpty)
+          else if (!participant.isCancelled && !checkedIn)
             GestureDetector(
               onTap: onManualCheckIn,
               child: Container(

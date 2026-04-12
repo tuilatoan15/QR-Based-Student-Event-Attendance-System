@@ -98,8 +98,9 @@ const ReportsPage: React.FC = () => {
             className="text-xs font-semibold py-2 pl-3 pr-8 rounded-lg border-gray-200 bg-white shadow-sm focus:ring-2 focus:ring-primary/20 outline-none cursor-pointer"
           >
             <option value="all">Tất cả loại</option>
-            <option value="Báo lỗi hệ thống (Bug)">Báo lỗi</option>
-            <option value="Hỗ trợ chung">Góp ý</option>
+            <option value="Bug">Báo lỗi</option>
+            <option value="Feature">Góp ý</option>
+            <option value="Question">Câu hỏi</option>
           </select>
 
           <select 
@@ -159,9 +160,11 @@ const ReportsPage: React.FC = () => {
               <div className="flex-1">
                 <div className="mb-3 bg-slate-50/50 p-3 rounded-lg border border-slate-50">
                   <div className={`text-[10px] font-black uppercase tracking-[1px] mb-1.5 px-0.5 ${
-                    report.type === 'Báo lỗi hệ thống (Bug)' ? 'text-rose-500' : 'text-sky-500'
+                    report.type === 'Bug' ? 'text-rose-500' : 
+                    report.type === 'Question' ? 'text-amber-500' : 'text-sky-500'
                   }`}>
-                    {report.type === 'Báo lỗi hệ thống (Bug)' ? 'Báo lỗi' : 'Góp ý'}
+                    {report.type === 'Bug' ? 'Báo lỗi' : 
+                     report.type === 'Question' ? 'Câu hỏi' : 'Góp ý'}
                   </div>
                   <h3 className="font-bold text-gray-900 text-base mb-1.5 line-clamp-1">{report.title}</h3>
                   <p className="text-gray-600 text-sm leading-relaxed line-clamp-3">{report.content}</p>

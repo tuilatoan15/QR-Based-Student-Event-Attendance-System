@@ -219,7 +219,6 @@ const listAttendance = async (req, res, next) => {
       // If filtering by event, show ALL registrations for that specific event (full roster)
       const registrations = await Registration.find({
         ...filter,
-        status: { $ne: REGISTRATION_STATUS.CANCELLED },
       })
         .populate('user_id', 'full_name email student_code legacy_sql_id')
         .populate('event_id', 'title legacy_sql_id')

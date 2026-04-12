@@ -68,8 +68,9 @@ class QRService {
    * @returns {boolean} - True if valid format
    */
   validateQrToken(qrToken) {
-    const qrTokenRegex = /^QR_\d+_[a-f0-9]+$/;
-    return qrTokenRegex.test(qrToken) && qrToken.length <= 50;
+    // Support both standard QR_... format and UUID format (for seeded data)
+    const qrTokenRegex = /^(QR_\d+_[a-f0-9]+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+    return qrTokenRegex.test(qrToken) && qrToken.length <= 60;
   }
 
   /**
